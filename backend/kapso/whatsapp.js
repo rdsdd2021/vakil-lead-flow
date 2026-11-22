@@ -32,11 +32,14 @@ function formatWhatsAppNumber(phone) {
 /**
  * Send WhatsApp text or template message via Kapso API
  */
-async function sendWhatsAppMessage({ to, text, templateName, templateLanguage = 'en' }) {
+async function sendWhatsAppMessage({ to, text, templateName, templateLanguage = 'en_US' }) {
   const cleanTo = formatWhatsAppNumber(to);
   if (!cleanTo) {
     throw new Error('Valid recipient phone number is required');
   }
+
+  // Normalize language code ('en' -> 'en_US' for Meta Cloud API template compatibility)
+  const normalizedLanguage = templateLanguage === 'en' ? 'en_US' : templateLanguage;
 
   // If no API key configured, run in transparent local development/sandbox simulation mode
   if (!KAPSO_API_KEY || KAPSO_API_KEY === 'your_kapso_api_key_here') {
@@ -62,7 +65,7 @@ async function sendWhatsAppMessage({ to, text, templateName, templateLanguage = 
       type: 'template',
       template: {
         name: templateName,
-        language: { code: templateLanguage },
+        language: { code: normalizedLanguage },
       },
     };
   } else {

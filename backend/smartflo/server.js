@@ -44,6 +44,9 @@ const { sendWhatsAppMessage, parseKapsoWebhookPayload, formatWhatsAppNumber } = 
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
+// In-memory message store for hybrid local resilience (active when MySQL is not running)
+const inMemoryWhatsAppMessages = [];
+
 function sendJson(res, statusCode, data) {
   res.writeHead(statusCode, {
     'Content-Type': 'application/json',
@@ -497,7 +500,23 @@ const server = http.createServer(async (req, res) => {
             }
           } catch (e) {}
 
-          // Insert into whatsapp_messages table
+          // Insert into in-memory store and MySQL whatsapp_messages table
+          const inboundMsg = {
+            id: msgId,
+            lead_id: leadId,
+            ticket_id: null,
+            phone_number: ev.from,
+            direction: 'inbound',
+            sender_id: null,
+            sender_name: ev.name || 'Client',
+            message_type: 'text',
+            content: ev.text,
+            status: 'delivered',
+            kapso_message_id: ev.messageId,
+            created_at: ev.timestamp || new Date().toISOString(),
+          };
+          inMemoryWhatsAppMessages.push(inboundMsg);
+
           try {
             await query(
               `INSERT INTO whatsapp_messages (id, lead_id, phone_number, direction, sender_name, message_type, content, status, kapso_message_id)
@@ -505,7 +524,7 @@ const server = http.createServer(async (req, res) => {
               [msgId, leadId, ev.from, ev.name, ev.text, ev.messageId]
             );
           } catch (dbErr) {
-            console.warn('[Kapso Webhook] Could not insert whatsapp_message:', dbErr.message);
+            console.warn('[Kapso Webhook] Could not insert whatsapp_message into MySQL (cached in memory):', dbErr.message);
           }
 
           // If lead exists, append to communication notes activity
@@ -544,11 +563,12 @@ const server = http.createServer(async (req, res) => {
     // 11. REST API: Kapso WhatsApp Chat (Send & Fetch History)
     // -----------------------------------------------------------------
     if (pathname === '/api/whatsapp/messages' && method === 'GET') {
-      try {
-        const phone = parsedUrl.query.phone ? formatWhatsAppNumber(parsedUrl.query.phone) : '';
-        const leadId = parsedUrl.query.leadId || '';
-        const ticketId = parsedUrl.query.ticketId || '';
+      const phone = parsedUrl.query.phone ? formatWhatsAppNumber(parsedUrl.query.phone) : '';
+      const leadId = parsedUrl.query.leadId || '';
+      const ticketId = parsedUrl.query.ticketId || '';
+      const cleanLast10 = phone ? phone.slice(-10) : '';
 
+      try {
         let sql = 'SELECT * FROM whatsapp_messages WHERE 1=1';
         const params = [];
 
@@ -566,10 +586,22 @@ const server = http.createServer(async (req, res) => {
         sql += ' ORDER BY created_at ASC LIMIT 100';
 
         const rows = await query(sql, params);
-        return sendJson(res, 200, rows || []);
+        if (rows && rows.length > 0) {
+          return sendJson(res, 200, rows);
+        }
       } catch (err) {
-        return sendJson(res, 500, { error: 'Failed to fetch WhatsApp messages: ' + err.message });
+        console.warn('[WhatsApp Messages] MySQL unavailable, serving from in-memory fallback store:', err.message);
       }
+
+      // In-memory fallback if MySQL query fails or returned 0 rows
+      const matched = inMemoryWhatsAppMessages.filter(m => {
+        if (leadId && m.lead_id === leadId) return true;
+        if (ticketId && m.ticket_id === ticketId) return true;
+        if (cleanLast10 && m.phone_number && String(m.phone_number).includes(cleanLast10)) return true;
+        return false;
+      });
+
+      return sendJson(res, 200, matched);
     }
 
     if (pathname === '/api/whatsapp/send' && method === 'POST') {
@@ -599,30 +631,48 @@ const server = http.createServer(async (req, res) => {
           });
         }
 
-        // 2. Persist in MySQL whatsapp_messages
+        // 2. Prepare standardized message entity
         const msgId = `wa_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
         const kapsoMsgId = kapsoResult.messages?.[0]?.id || null;
         const cleanPhone = formatWhatsAppNumber(to);
 
-        await query(
-          `INSERT INTO whatsapp_messages (id, lead_id, ticket_id, phone_number, direction, sender_id, sender_name, message_type, content, status, kapso_message_id)
-           VALUES (?, ?, ?, ?, 'outbound', ?, ?, ?, ?, 'sent', ?)`,
-          [
-            msgId,
-            leadId || null,
-            ticketId || null,
-            cleanPhone,
-            senderId || 'staff',
-            senderName || 'Vakil Staff',
-            templateName ? 'template' : 'text',
-            String(text || `Template: ${templateName}`).trim(),
-            kapsoMsgId,
-          ]
-        );
+        const savedMessage = {
+          id: msgId,
+          lead_id: leadId || null,
+          ticket_id: ticketId || null,
+          phone_number: cleanPhone,
+          direction: 'outbound',
+          sender_id: senderId || 'staff',
+          sender_name: senderName || 'Vakil Staff',
+          message_type: templateName ? 'template' : 'text',
+          content: String(text || `Template: ${templateName}`).trim(),
+          status: 'sent',
+          kapso_message_id: kapsoMsgId,
+          created_at: new Date().toISOString(),
+        };
 
-        // 3. Log to Lead / Ticket timeline
-        if (leadId) {
-          try {
+        // Cache in memory immediately
+        inMemoryWhatsAppMessages.push(savedMessage);
+
+        // 3. Gracefully persist in MySQL (wrapped so db errors never fail outbound messages)
+        try {
+          await query(
+            `INSERT INTO whatsapp_messages (id, lead_id, ticket_id, phone_number, direction, sender_id, sender_name, message_type, content, status, kapso_message_id)
+             VALUES (?, ?, ?, ?, 'outbound', ?, ?, ?, ?, 'sent', ?)`,
+            [
+              msgId,
+              leadId || null,
+              ticketId || null,
+              cleanPhone,
+              senderId || 'staff',
+              senderName || 'Vakil Staff',
+              templateName ? 'template' : 'text',
+              String(text || `Template: ${templateName}`).trim(),
+              kapsoMsgId,
+            ]
+          );
+
+          if (leadId) {
             const rows = await query('SELECT communication_notes FROM leads WHERE id = ?', [leadId]);
             if (rows && rows.length > 0) {
               let notes = { notes: [], call_logs: [], meetings: [], activity_logs: [] };
@@ -644,15 +694,14 @@ const server = http.createServer(async (req, res) => {
                 leadId,
               ]);
             }
-          } catch (timelineErr) {
-            console.warn('Could not update lead communication_notes for WhatsApp:', timelineErr.message);
           }
+        } catch (dbErr) {
+          console.warn('[WhatsApp Send] MySQL persistence skipped (message cached in memory):', dbErr.message);
         }
 
-        const [created] = await query('SELECT * FROM whatsapp_messages WHERE id = ?', [msgId]);
         return sendJson(res, 201, {
           success: true,
-          message: created || { id: msgId, content: text, status: 'sent' },
+          message: savedMessage,
           kapso: kapsoResult,
         });
       } catch (err) {

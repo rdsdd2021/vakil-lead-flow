@@ -92,10 +92,22 @@ export async function fetchWhatsAppMessages(
     if (res && res.ok) {
       const data = await res.json();
       if (Array.isArray(data)) {
-        // Cache to localStorage
         const cacheKey = `wa_history_${leadId || ticketId || phone || 'global'}`;
-        localStorage.setItem(cacheKey, JSON.stringify(data));
-        return data;
+        const cachedRaw = localStorage.getItem(cacheKey);
+        let merged = data;
+        if (cachedRaw) {
+          try {
+            const cached: WhatsAppMessage[] = JSON.parse(cachedRaw);
+            const map = new Map<string, WhatsAppMessage>();
+            for (const item of cached) { if (item.id) map.set(item.id, item); }
+            for (const item of data) { if (item.id) map.set(item.id, item); }
+            merged = Array.from(map.values()).sort((a, b) => 
+              new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+            );
+          } catch (e) {}
+        }
+        localStorage.setItem(cacheKey, JSON.stringify(merged));
+        return merged;
       }
     }
   } catch (err) {

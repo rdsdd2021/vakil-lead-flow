@@ -10,10 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { 
   FileText, Shield, CheckCircle2, ArrowLeft, Phone, User, MapPin, 
   Mail, Clock, AlertCircle, Copy, ExternalLink, Sparkles, Building,
-  Scale, Calendar
+  Scale, Calendar, MessageCircle
 } from 'lucide-react';
 import { SERVICE_LABELS, ServiceType } from '@/types/crm';
 import { SMARTFLO_CONFIG } from '@/lib/smartflo';
+import { sendWhatsAppMessageApi } from '@/lib/kapso';
 import vakiltechLogo from '@/assets/vakiltech-logo.png';
 import { toast } from 'sonner';
 
@@ -134,6 +135,18 @@ export default function LeadIntake() {
         };
         localStorage.setItem('vakil_leads', JSON.stringify([completeLead, ...(Array.isArray(parsed) ? parsed : [])]));
         window.dispatchEvent(new Event('vakil_storage_sync'));
+      }
+
+      // Automated WhatsApp Enquiry Dispatch via Kapso AI
+      try {
+        await sendWhatsAppMessageApi({
+          to: formattedPhone,
+          templateName: 'enquiry_acknowledgement',
+          text: `Thank you for contacting Vakiltech Legal Team. We have received your inquiry (Ref: ${customId}). Please reply to this message with any documents or details so our advocate can assist you.`,
+          senderName: 'Vakiltech Intake Desk',
+        });
+      } catch (waErr) {
+        console.warn('[Intake] Automated WhatsApp dispatch notice:', waErr);
       }
 
       setSubmittedLead({
@@ -269,6 +282,38 @@ export default function LeadIntake() {
                 <span className="text-muted-foreground">Review Urgency:</span>
                 <span className="font-semibold capitalize text-foreground">{submittedLead.priority} Priority</span>
               </div>
+            </div>
+
+            {/* WhatsApp Direct Messaging Channel */}
+            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 text-left space-y-3">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <MessageCircle className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    Connect on Official WhatsApp
+                    <Badge variant="outline" className="text-[9px] bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30">
+                      Direct Support
+                    </Badge>
+                  </h4>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
+                    Message our official legal desk to submit case documents, verify your identity, or talk with your assigned advocate.
+                  </p>
+                </div>
+              </div>
+
+              <Button
+                type="button"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs h-10 rounded-xl gap-2 shadow-sm"
+                onClick={() => {
+                  const text = encodeURIComponent(`Hi Vakiltech Legal Team, I have registered inquiry Ref: ${submittedLead.customId} regarding ${submittedLead.service}.`);
+                  window.open(`https://wa.me/12084850645?text=${text}`, '_blank');
+                }}
+              >
+                <MessageCircle className="w-4 h-4" />
+                <span>Open WhatsApp Chat with Vakiltech (+1 208-485-0645)</span>
+              </Button>
             </div>
 
             {/* Telephony Bridging Notice */}
