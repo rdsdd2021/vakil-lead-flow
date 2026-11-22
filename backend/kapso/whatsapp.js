@@ -89,7 +89,6 @@ async function sendWhatsAppMessage({ to, text, templateName, templateLanguage = 
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${KAPSO_API_KEY}`,
           'X-API-Key': KAPSO_API_KEY,
           'Content-Length': Buffer.byteLength(dataString),
         },
@@ -108,10 +107,14 @@ async function sendWhatsAppMessage({ to, text, templateName, templateLanguage = 
               });
             } else {
               console.error('[Kapso AI Error Response]:', parsed);
+              const errorMessage = typeof parsed.error === 'string'
+                ? parsed.error
+                : (parsed.error?.message || parsed.message || 'Kapso API error');
+              const nextSteps = parsed.next_steps ? ` - ${parsed.next_steps}` : '';
               resolve({
                 success: false,
                 statusCode: res.statusCode,
-                error: parsed.error?.message || 'Kapso API error',
+                error: errorMessage + nextSteps,
                 raw: parsed,
               });
             }
