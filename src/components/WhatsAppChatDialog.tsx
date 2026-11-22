@@ -111,10 +111,10 @@ export const WhatsAppChatDialog: React.FC<WhatsAppChatDialogProps> = ({
           toast.success('WhatsApp delivered via Kapso AI Cloud API');
         }
       } else {
-        toast.error('Failed to send message over WhatsApp');
+        toast.error(response.error || 'Failed to send message over WhatsApp', { duration: 6000 });
       }
     } catch (err: any) {
-      toast.error('Error sending message: ' + (err.message || 'Network error'));
+      toast.error('Error sending message: ' + (err.message || 'Network error'), { duration: 6000 });
     } finally {
       setIsSending(false);
     }

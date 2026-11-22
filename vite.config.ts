@@ -18,6 +18,11 @@ export default defineConfig(({ mode }) => ({
         rewrite: (path) => path.replace(/^\/api\/smartflo/, ""),
         secure: false,
       },
+      "/api": {
+        target: "http://localhost:3001",
+        changeOrigin: true,
+        secure: false,
+      },
     },
   },
   plugins: [

@@ -133,7 +133,7 @@ export async function sendWhatsAppMessageApi({
   templateName?: string;
   senderId?: string;
   senderName?: string;
-}): Promise<{ success: boolean; message: WhatsAppMessage; simulated?: boolean }> {
+}): Promise<{ success: boolean; message: WhatsAppMessage; simulated?: boolean; error?: string }> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/whatsapp/send`, {
       method: 'POST',
@@ -162,29 +162,21 @@ export async function sendWhatsAppMessageApi({
         message: json.message,
         simulated: json.kapso?.simulated,
       };
+    } else {
+      const errJson = await res.json().catch(() => ({}));
+      const errMsg = errJson.error || `HTTP ${res.status} error from WhatsApp provider`;
+      return {
+        success: false,
+        error: errMsg,
+        message: null as any,
+      };
     }
-  } catch (err) {
-    console.warn('[WhatsApp] Online send failed, generating optimistic offline message:', err);
+  } catch (err: any) {
+    console.warn('[WhatsApp] Network error:', err);
+    return {
+      success: false,
+      error: 'Network error connecting to backend server: ' + (err.message || 'Check if server is running'),
+      message: null as any,
+    };
   }
-
-  // Fallback optimistic message for offline testing
-  const offlineMsg: WhatsAppMessage = {
-    id: `wa_offline_${Date.now()}`,
-    lead_id: leadId || null,
-    ticket_id: ticketId || null,
-    phone_number: to,
-    direction: 'outbound',
-    sender_id: senderId || 'staff',
-    sender_name: senderName || 'Staff (Offline)',
-    message_type: templateName ? 'template' : 'text',
-    content: text || `Template: ${templateName}`,
-    status: 'sent',
-    created_at: new Date().toISOString(),
-  };
-
-  const cacheKey = `wa_history_${leadId || ticketId || to || 'global'}`;
-  const existing: WhatsAppMessage[] = JSON.parse(localStorage.getItem(cacheKey) || '[]');
-  localStorage.setItem(cacheKey, JSON.stringify([...existing, offlineMsg]));
-
-  return { success: true, message: offlineMsg, simulated: true };
 }

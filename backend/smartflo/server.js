@@ -588,6 +588,17 @@ const server = http.createServer(async (req, res) => {
           templateName,
         });
 
+        if (!kapsoResult.success) {
+          const rawErr = kapsoResult.raw?.error;
+          const userFriendlyError = typeof rawErr === 'string'
+            ? rawErr
+            : (rawErr?.message || kapsoResult.error || 'Meta WhatsApp rejected the message.');
+          return sendJson(res, 400, {
+            error: userFriendlyError,
+            kapso: kapsoResult,
+          });
+        }
+
         // 2. Persist in MySQL whatsapp_messages
         const msgId = `wa_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
         const kapsoMsgId = kapsoResult.messages?.[0]?.id || null;
