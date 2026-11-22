@@ -27,3 +27,6 @@ dist-ssr
 *.sw?
 
 .vercel
+cloudflared.exe
+ngrok.exe
+tunnel-url.txt

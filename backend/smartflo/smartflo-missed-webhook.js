@@ -9,13 +9,18 @@
  */
 
 const { query } = require('../db/mysql');
-const webpush = require('web-push');
+let webpush = null;
+try {
+  webpush = require('web-push');
+} catch (e) {
+  // web-push is optional for local development
+}
 
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BM_REPLACE_WITH_YOUR_VAPID_PUBLIC_KEY_IN_PRODUCTION';
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
 const VAPID_SUBJECT = 'mailto:support@vakiltech.com';
 
-if (VAPID_PRIVATE_KEY) {
+if (webpush && VAPID_PRIVATE_KEY) {
   try {
     webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
   } catch (e) {
@@ -73,7 +78,7 @@ exports.handler = async (event) => {
     );
 
     // Send Web Push notification if subscription exists in MySQL
-    if (VAPID_PRIVATE_KEY && targetAgentId) {
+    if (webpush && VAPID_PRIVATE_KEY && targetAgentId) {
       const subRes = await query('SELECT subscription FROM push_subscriptions WHERE user_id = ?', [targetAgentId]);
       if (subRes && subRes.length > 0) {
         const pushPayload = JSON.stringify({
