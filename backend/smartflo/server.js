@@ -650,6 +650,25 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
+    // Root status endpoint
+    if (req.method === 'GET' && (parsedUrl.pathname === '/' || parsedUrl.pathname === '')) {
+      return sendJson(res, 200, {
+        status: 'online',
+        service: 'Vakil Lead Flow Backend & Kapso WhatsApp Webhook Server',
+        version: '2.4.0',
+        port: PORT,
+        endpoints: {
+          health: '/api/health',
+          whatsapp_webhook: '/webhooks/whatsapp',
+          whatsapp_messages: '/api/whatsapp/messages',
+          leads: '/api/leads',
+          tickets: '/api/tickets'
+        },
+        frontend_ui: 'http://localhost:8080',
+        note: 'This is the backend API and webhook listener. To access the CRM UI, open http://localhost:8080 in your browser.'
+      });
+    }
+
     // Not Found
     return sendJson(res, 404, { error: 'Route not found' });
   } catch (globalErr) {
