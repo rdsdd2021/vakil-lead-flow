@@ -1,0 +1,10 @@
+{
+  "name": "smartflo-backend",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "description": "Tata Smartflo API Dialplan and Webhooks Server",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

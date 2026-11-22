@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: vakil-smartflo-dialplan
+    env: node
+    plan: free
+    buildCommand: ""
+    startCommand: "node backend/smartflo/server.js"
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: FALLBACK_AGENT_PHONE
+        value: 919800000000

@@ -1,0 +1,229 @@
+# System Architecture & Technical Design
+
+This document details the architectural design, component structure, state management patterns, storage engine, and telephony subsystems of the **Vakil Lead Flow CRM & Cloud Telephony Platform**.
+
+---
+
+```mermaid
+flowchart TB
+    subgraph ClientLayer ["Client Presentation Layer (SPA)"]
+        UI["React 18 + Vite + TypeScript + Tailwind CSS"]
+        Router["React Router DOM (Protected Routes & Navigation)"]
+        Intake["Public Client Intake (/intake)"]
+        Dashboard["Admin & Staff CRM Dashboard (/)"]
+        DialerUI["Smartflo Click-to-Call Dialog"]
+    end
+
+    subgraph StateAndStorage ["Offline-First Data Layer"]
+        Context["CRMContext State Provider"]
+        SyncEngine["Storage Event Synchronizer (vakil_storage_sync)"]
+        LocalStorage[("Browser LocalStorage Engine")]
+    end
+
+    subgraph ServerlessLayer ["Vercel Serverless Functions"]
+        DialplanAPI["/api/dialplan (Inbound Dynamic Dialplan)"]
+        RecordingAPI["/api/recording (HTTP 206 Audio Streaming Proxy)"]
+    end
+
+    subgraph ExternalServices ["External Telephony Provider"]
+        SmartfloAPI["Tata Smartflo API (https://api-smartflo.tatateleservices.com)"]
+        SmartfloDID["Virtual DID: Configured Telephony Line"]
+        TataMedia["Tata Recording Media Cluster (cloudphone.tatateleservices.com)"]
+    end
+
+    %% Client to State/Storage
+    Intake -->|Optimistic Write| Context
+    Dashboard -->|Read / Mutate| Context
+    Context <-->|CRUD Operations| LocalStorage
+    LocalStorage <-->|Storage Event Sync| SyncEngine
+    SyncEngine -->|Trigger Re-render| Context
+
+    %% Telephony Flows
+    DialerUI -->|Trigger Outbound Call| SmartfloAPI
+    SmartfloDID -->|Webhook Inbound Ring| DialplanAPI
+    DialplanAPI -->|JSON Transfer Rules| SmartfloDID
+    RecordingAPI -->|Fetch & Sanitize Stream| TataMedia
+    Dashboard -->|Play Audio via Proxy| RecordingAPI
+```
+
+---
+
+## 1. High-Level System Overview
+The platform is built as a high-performance, offline-capable Single Page Application (SPA) paired with lightweight serverless functions for telephony coordination:
+* **Frontend Core**: Built with React 18, Vite 7, TypeScript, Tailwind CSS, and Radix UI / shadcn component primitives.
+* **Storage Engine**: Offline-first, browser-local persistence using structured `localStorage` with reactive cross-tab synchronization.
+* **Serverless Functions**: Hosted on Vercel Node runtime at `/api/dialplan` and `/api/recording` to satisfy external telephony webhooks without requiring long-running server infrastructure.
+* **Cloud Telephony**: Deep integration with Tata Tele Business Services (Smartflo) for bidirectional calls, number masking, and call recording management.
+
+---
+
+## 2. Storage Engine & State Architecture
+
+### 2.1 Local Storage Schema
+The CRM eliminates external database latency by persisting data in browser `localStorage`. Each record collection has a strictly typed schema:
+
+| Storage Key | Type | Description |
+| :--- | :--- | :--- |
+| `vakil_leads` | `Lead[]` | Complete array of client inquiries, statuses, contact numbers, and communication logs. |
+| `vakil_tickets` | `Ticket[]` | Active legal matters, billing totals, advance payments, and assigned case lawyers. |
+| `vakil_users` | `CRMUser[]` | Registered system staff, roles (`super_admin`, `front_desk`, `lawyer`), and contact phones. |
+| `vakil_auth_user` | `CRMUser` | Currently authenticated user session, role tokens, and profile identifiers. |
+| `smartflo_user_phone_{id}` | `string` | User-specific 10-digit mobile number override for Smartflo two-way bridging. |
+| `smartflo_agent_phone` | `string` | Global fallback calling mobile number (defaults to `9800000001` or env). |
+| `vakil_push_sub_{id}` | `object` | Local Web Push subscription metadata for in-browser desktop notifications. |
+
+### 2.2 Cross-Tab Reactive Synchronization
+Because the CRM operates an intake portal at `/intake` and an internal dashboard at `/`, data entered on the public form or by staff in another tab must immediately synchronize without requiring manual page reloads.
+
+This is accomplished via a dual-listener reactive synchronization engine in [CRMContext.tsx](file:///C:/Users/Ramanuj%20Dey%20Sarkar/Downloads/vakil-lead-flow-main/vakil-lead-flow-main/src/contexts/CRMContext.tsx):
+
+```mermaid
+sequenceDiagram
+    participant TabA as Tab A: Client Intake (/intake)
+    participant Storage as Browser LocalStorage
+    participant EventBus as Window Storage Event Bus
+    participant TabB as Tab B: Leads Dashboard (/)
+
+    TabA->>Storage: localStorage.setItem('vakil_leads', JSON.stringify(leads))
+    TabA->>EventBus: window.dispatchEvent(new Event('vakil_storage_sync'))
+    Storage-->>TabB: native 'storage' event fires
+    EventBus-->>TabB: custom 'vakil_storage_sync' event fires
+    TabB->>TabB: fetchLeads() reads updated state
+    TabB->>TabB: UI updates instantly with New Lead badge
+```
+
+```typescript
+// Implementation in CRMContext.tsx
+useEffect(() => {
+  fetchLeads();
+  fetchTickets();
+  fetchLawyers();
+
+  const handleStorageSync = () => {
+    fetchLeads();
+    fetchTickets();
+    fetchLawyers();
+  };
+
+  window.addEventListener('storage', handleStorageSync);
+  window.addEventListener('vakil_storage_sync', handleStorageSync);
+  return () => {
+    window.removeEventListener('storage', handleStorageSync);
+    window.removeEventListener('vakil_storage_sync', handleStorageSync);
+  };
+}, []);
+```
+
+---
+
+## 3. Role-Based Access Control (RBAC) Matrix
+
+The application provides strict boundary separation between administrative staff, intake operators, and case lawyers:
+
+| Feature / Action | Super Admin | Front Desk | Lawyer (Case Handler) |
+| :--- | :---: | :---: | :---: |
+| **View Unassigned Leads** | ✅ Full Access | ✅ Full Access | ❌ Restricted |
+| **Create New Lead / Public Intake** | ✅ Yes | ✅ Yes | ✅ Yes |
+| **Assign Lawyer to Lead / Ticket** | ✅ Yes | ✅ Yes | ❌ Restricted |
+| **View Full Client Mobile Number** | ✅ Full (Unmasked) | ⚠️ Masked (`+91 98••• ••210`) | ⚠️ Masked (`+91 98••• ••210`) |
+| **Click-to-Call Customer (Smartflo)** | ✅ Yes | ✅ Yes | ✅ Yes (Assigned cases) |
+| **Access Financials / Billing Analytics**| ✅ Full Access | ❌ Restricted | ⚠️ View Own Case Balances |
+| **Manage Firm Team & Roles** | ✅ Full Access | ❌ Restricted | ❌ Restricted |
+| **Access System Audit Logs** | ✅ Full Access | ❌ Restricted | ❌ Restricted |
+| **Update Own Calling Number** | ✅ Yes | ✅ Yes | ✅ Yes |
+
+---
+
+## 4. Telephony Integration Architecture
+
+The cloud telephony architecture handles both outbound click-to-call dialing and inbound call routing with dynamic lawyer resolution:
+
+```mermaid
+flowchart LR
+    subgraph Outbound ["Outbound Click-to-Call"]
+        Agent[Agent in CRM] -->|Click Call| CRMBridge[Smartflo Dialog]
+        CRMBridge -->|API POST /click_to_call| TTBS[Tata Smartflo PBX]
+        TTBS -->|Leg 1: Rings First| AgentPhone[Agent Mobile]
+        TTBS -->|Leg 2: Bridges Next| ClientPhone[Client Mobile]
+    end
+
+    subgraph Inbound ["Inbound DID Dialplan"]
+        Customer[Customer Calls Virtual DID] --> InboundPBX[Smartflo Virtual DID]
+        InboundPBX -->|HTTP POST| Dialplan[/api/dialplan Serverless/]
+        Dialplan -->|Match Assigned Lawyer| RoutingRule[Transfer to Lawyer]
+        RoutingRule --> InboundPBX
+        InboundPBX --> LawyerPhone[Lawyer Mobile Rings]
+    end
+```
+
+### 4.1 Number Masking Implementation
+To protect customer privacy and prevent lawyer/agent bypass, all client telephone numbers are passed through `maskPhoneNumber()` in [src/lib/smartflo.ts](file:///C:/Users/Ramanuj%20Dey%20Sarkar/Downloads/vakil-lead-flow-main/vakil-lead-flow-main/src/lib/smartflo.ts):
+```typescript
+export function maskPhoneNumber(phone?: string | null, isSuperAdmin: boolean = false): string {
+  if (!phone) return '••••••••••';
+  if (isSuperAdmin) return phone.startsWith('+') ? phone : `+${phone}`;
+
+  const cleaned = phone.replace(/^\+/, '').replace(/\s+/g, '');
+  if (cleaned.length < 8) return '••••••••••';
+
+  const prefix = cleaned.slice(0, 4); // Country code + first 2 digits
+  const suffix = cleaned.slice(-3);  // Last 3 digits
+  return `+${prefix.slice(0, 2)} ${prefix.slice(2)}••• ••${suffix}`;
+}
+```
+
+### 4.2 Seekable Recording Streaming Proxy (`/api/recording`)
+Tata Smartflo stores call recordings on an upstream cluster (`cloudphone.tatateleservices.com`). Standard HTML5 `<audio>` tags fail when accessing these URLs directly due to two issues:
+1. **Malformed Headers**: Raw files return `Content-Type: audio/mpeg, audio/mp3`. Browsers require a single MIME type.
+2. **Missing Range Support**: Scrubbing requires HTTP `Range: bytes=X-Y` headers.
+
+The `/api/recording` endpoint proxies the audio file and intercepts headers:
+* Sets `Content-Type: audio/mpeg`.
+* Sets `Accept-Ranges: bytes`.
+* Converts streaming chunks into HTTP `206 Partial Content` with `Content-Range: bytes START-END/TOTAL`.
+
+---
+
+## 5. Directory Structure & Key Files
+
+```
+vakil-lead-flow-main/
+├── api/                                # Vercel Serverless Functions
+│   ├── dialplan.js                     # Smartflo Dynamic Dialplan Webhook
+│   └── recording.js                    # HTTP 206 Seekable Call Recording Proxy
+├── backend/                            # Standalone Telephony Support Microservice
+│   └── smartflo/
+│       ├── server.js                   # Node.js fallback server for dialplan
+│       └── smartflo-dialplan-webhook.js
+├── docs/                               # Comprehensive Documentation Suite
+│   ├── TIMELINE.md                     # Engineering & Evolution History
+│   ├── CHANGELOG.md                    # SemVer Release Notes
+│   ├── ARCHITECTURE.md                 # System Architecture (This file)
+│   ├── TELEPHONY_INTEGRATION_GUIDE.md  # Tata Smartflo Technical Manual
+│   ├── USER_AND_ADMIN_MANUAL.md        # Staff Operations & User Guide
+│   └── DEPLOYMENT_AND_RUNBOOK.md       # Build, Deploy & Recovery Runbook
+├── src/
+│   ├── components/                     # Reusable UI & Business Components
+│   │   ├── SmartfloCallDialog.tsx      # Outbound Click-to-Call Modal
+│   │   ├── SmartfloDialplanSettings.tsx # Webhook Inbound Tester
+│   │   ├── StatusBadges.tsx            # Visual Pipeline Indicators
+│   │   └── ui/                         # shadcn/ui Component Primitives
+│   ├── contexts/
+│   │   └── CRMContext.tsx              # Core LocalStorage & Reactivity Engine
+│   ├── data/
+│   │   └── mockData.ts                 # Production Role Definitions
+│   ├── lib/
+│   │   ├── smartflo.ts                 # Telephony Configuration & API Clients
+│   │   └── pushNotifications.ts        # Browser Push Notification Manager
+│   ├── pages/                          # Primary Routed Views
+│   │   ├── LeadsDashboard.tsx          # Kanban & Lead Triage
+│   │   ├── LeadIntake.tsx              # Public & Staff Client Intake Portal (/intake)
+│   │   ├── Tickets.tsx                 # Case Matter & Billing Management
+│   │   ├── FollowUps.tsx               # Scheduled Callback Reminders
+│   │   ├── Login.tsx                   # Hardened Credential Authentication
+│   │   └── MorePage.tsx                # User Profile & Calling Number Controls
+│   └── types/
+│       └── crm.ts                      # TypeScript Domain Models
+├── README.md                           # Master Project Overview
+└── vercel.json                         # Vercel Deployment & Routing Configuration
+```
