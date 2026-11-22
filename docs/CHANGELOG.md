@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [2.4.0] - 2026-11-22
+
+### Added
+* **In-CRM WhatsApp Chat Integration via Kapso AI**: Built complete client messaging capability directly within the CRM, eliminating the need to leave the application for external `wa.me` links.
+* **Persistent MySQL Message History**: Added `whatsapp_messages` table to MySQL with indexes on phone number, lead ID, ticket ID, and timestamp.
+* **Kapso WhatsApp Cloud API Backend Engine**: Created [backend/kapso/whatsapp.js](file:///C:/Users/Ramanuj%20Dey%20Sarkar/Downloads/vakil-lead-flow-main/vakil-lead-flow-main/backend/kapso/whatsapp.js) handling Meta WhatsApp Cloud API `v24.0` requests, Bearer token authorization, Indian phone number formatting (`91XXXXXXXXXX`), and sandbox simulation fallback.
+* **Inbound WhatsApp Webhooks**: Implemented `POST /webhooks/whatsapp` and `GET /webhooks/whatsapp` (challenge verification) for incoming client replies, status delivery receipts (`sent`, `delivered`, `read`), and automatic activity logging on matched leads.
+* **Interactive WhatsApp Chat Modal**: Created [src/components/WhatsAppChatDialog.tsx](file:///C:/Users/Ramanuj%20Dey%20Sarkar/Downloads/vakil-lead-flow-main/vakil-lead-flow-main/src/components/WhatsAppChatDialog.tsx) with chat bubbles, delivery checkmarks, 4-second reactive polling, auto-scroll, and external `wa.me` fallback link.
+* **1-Click Quick Legal Templates**: Pre-configured instant reply templates for Consultation Welcome, Document Checklist Request, Draft Notice Ready, Hearing Date Update, and Fee Settlement Receipt.
+* **Universal UI Access Points**: Embedded interactive chat banners and triggers across [QuickActions.tsx](file:///C:/Users/Ramanuj%20Dey%20Sarkar/Downloads/vakil-lead-flow-main/vakil-lead-flow-main/src/components/QuickActions.tsx), [LeadDetail.tsx](file:///C:/Users/Ramanuj%20Dey%20Sarkar/Downloads/vakil-lead-flow-main/vakil-lead-flow-main/src/pages/LeadDetail.tsx), [TicketDetail.tsx](file:///C:/Users/Ramanuj%20Dey%20Sarkar/Downloads/vakil-lead-flow-main/vakil-lead-flow-main/src/pages/TicketDetail.tsx), and [Tickets.tsx](file:///C:/Users/Ramanuj%20Dey%20Sarkar/Downloads/vakil-lead-flow-main/vakil-lead-flow-main/src/pages/Tickets.tsx).
+* **Technical Integration Guide**: Authored [docs/KAPSO_WHATSAPP_INTEGRATION_GUIDE.md](file:///C:/Users/Ramanuj%20Dey%20Sarkar/Downloads/vakil-lead-flow-main/vakil-lead-flow-main/docs/KAPSO_WHATSAPP_INTEGRATION_GUIDE.md) detailing architecture, API endpoints, webhook setup, database schema, and sandbox simulation.
+
+---
+
 ## [2.3.0] - 2026-11-22
 
 ### Added

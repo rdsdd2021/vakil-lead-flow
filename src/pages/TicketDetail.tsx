@@ -13,6 +13,7 @@ import { TICKET_STATUS_LABELS, TicketStatus } from '@/types/crm';
 import { formatDistanceToNow, format } from 'date-fns';
 import { toast } from 'sonner';
 import { sendPushNotification } from '@/lib/pushNotifications';
+import { WhatsAppChatDialog } from '@/components/WhatsAppChatDialog';
 
 type NoteType = 'note' | 'call_log' | 'meeting';
 
@@ -43,6 +44,7 @@ const TicketDetail = () => {
   const [editingDocLink, setEditingDocLink] = useState('');
   const [rejectionNote, setRejectionNote] = useState('');
   const [showRejectForm, setShowRejectForm] = useState(false);
+  const [chatDialogOpen, setChatDialogOpen] = useState(false);
 
   if (isLoadingTickets) {
     return (
@@ -225,6 +227,7 @@ const TicketDetail = () => {
           name={ticket.client_name} 
           service={ticket.service_type}
           leadId={ticket.client_id}
+          ticketId={ticket.ticket_id}
           onFollowup={async (date, note) => {
             const history = ticket.followup_history ? (typeof ticket.followup_history === 'string' ? JSON.parse(ticket.followup_history) : ticket.followup_history) : [];
             const record = {
@@ -241,6 +244,32 @@ const TicketDetail = () => {
             });
           }}
         />
+
+        {/* In-CRM WhatsApp Chat Banner */}
+        <Card className="p-3.5 bg-gradient-to-r from-success/10 via-success/5 to-background border-success/30 rounded-xl shadow-xs">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-success text-white flex items-center justify-center shrink-0 shadow-xs">
+                <MessageCircle className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <h4 className="text-xs font-semibold text-foreground truncate">Case WhatsApp Chat</h4>
+                  <span className="text-[9px] bg-success/20 text-success font-semibold px-1.5 py-0.2 rounded">Kapso AI</span>
+                </div>
+                <p className="text-[11px] text-muted-foreground truncate">Live client communication for #{ticket.ticket_id}</p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              className="h-8 px-3 rounded-lg bg-success hover:bg-success/90 text-success-foreground text-xs gap-1.5 shrink-0 shadow-xs"
+              onClick={() => setChatDialogOpen(true)}
+            >
+              <MessageCircle className="w-3.5 h-3.5" />
+              Open Chat
+            </Button>
+          </div>
+        </Card>
 
         <Card className="p-4 space-y-3">
           <div className="flex items-center gap-2 flex-wrap">
@@ -657,6 +686,21 @@ const TicketDetail = () => {
           )}
         </Card>
       </div>
+
+      {/* In-CRM WhatsApp Chat Dialog */}
+      <WhatsAppChatDialog
+        open={chatDialogOpen}
+        onOpenChange={setChatDialogOpen}
+        leadId={ticket.client_id}
+        ticketId={ticket.ticket_id}
+        clientName={ticket.client_name}
+        rawPhoneNumber={
+          leads.find(l => l.id === ticket.client_id)?.whatsapp_number
+          || leads.find(l => l.name === ticket.client_name)?.whatsapp_number
+          || ''
+        }
+        serviceTitle={ticket.service_type}
+      />
     </div>
   );
 };

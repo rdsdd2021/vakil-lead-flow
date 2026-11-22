@@ -20,6 +20,7 @@ const { resolveDialplanRoute } = require('./smartflo-dialplan-webhook');
 const hangupWebhook = require('./smartflo-hangup-webhook');
 const missedWebhook = require('./smartflo-missed-webhook');
 const callInitiate = require('./smartflo-call-initiate');
+const { sendWhatsAppMessage, parseKapsoWebhookPayload, formatWhatsAppNumber } = require('../kapso/whatsapp');
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
@@ -432,6 +433,203 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
+    // -----------------------------------------------------------------
+    // 10. Kapso AI WhatsApp Webhook (Verification & Inbound Events)
+    // -----------------------------------------------------------------
+    if ((pathname === '/webhooks/whatsapp' || pathname === '/webhooks/kapso/whatsapp') && method === 'GET') {
+      const mode = parsedUrl.query['hub.mode'];
+      const token = parsedUrl.query['hub.verify_token'];
+      const challenge = parsedUrl.query['hub.challenge'];
+
+      const expectedToken = process.env.KAPSO_WEBHOOK_VERIFY_TOKEN || 'vakil_kapso_token';
+      if (mode === 'subscribe' && (!token || token === expectedToken)) {
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end(challenge || 'OK');
+        return;
+      }
+      return sendJson(res, 403, { error: 'Verification token mismatch' });
+    }
+
+    if ((pathname === '/webhooks/whatsapp' || pathname === '/webhooks/kapso/whatsapp') && method === 'POST') {
+      const body = await parseJsonBody(req);
+      const events = parseKapsoWebhookPayload(body);
+
+      for (const ev of events) {
+        if (ev.type === 'message') {
+          const cleanPhone = ev.from.slice(-10);
+          const msgId = ev.messageId || `in_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+
+          // Find matching lead in MySQL
+          let leadId = null;
+          let existingNotes = { notes: [], call_logs: [], meetings: [], activity_logs: [] };
+          try {
+            const rows = await query(
+              'SELECT id, communication_notes FROM leads WHERE whatsapp_number LIKE ? OR phone LIKE ? LIMIT 1',
+              [`%${cleanPhone}`, `%${cleanPhone}`]
+            );
+            if (rows && rows.length > 0) {
+              leadId = rows[0].id;
+              if (rows[0].communication_notes) {
+                existingNotes = typeof rows[0].communication_notes === 'string'
+                  ? JSON.parse(rows[0].communication_notes)
+                  : rows[0].communication_notes;
+              }
+            }
+          } catch (e) {}
+
+          // Insert into whatsapp_messages table
+          try {
+            await query(
+              `INSERT INTO whatsapp_messages (id, lead_id, phone_number, direction, sender_name, message_type, content, status, kapso_message_id)
+               VALUES (?, ?, ?, 'inbound', ?, 'text', ?, 'delivered', ?)`,
+              [msgId, leadId, ev.from, ev.name, ev.text, ev.messageId]
+            );
+          } catch (dbErr) {
+            console.warn('[Kapso Webhook] Could not insert whatsapp_message:', dbErr.message);
+          }
+
+          // If lead exists, append to communication notes activity
+          if (leadId) {
+            try {
+              const waActivityLog = {
+                id: `act_${Date.now()}`,
+                action: 'WhatsApp Received',
+                details: `Inbound WhatsApp from client: "${ev.text.slice(0, 100)}${ev.text.length > 100 ? '...' : ''}"`,
+                created_by: ev.name || 'Client',
+                created_at: ev.timestamp || new Date().toISOString(),
+              };
+              existingNotes.activity_logs = [waActivityLog, ...(existingNotes.activity_logs || [])];
+              await query('UPDATE leads SET communication_notes = ?, updated_at = NOW() WHERE id = ?', [
+                JSON.stringify(existingNotes),
+                leadId,
+              ]);
+            } catch (noteErr) {
+              console.warn('[Kapso Webhook] Could not update lead notes:', noteErr.message);
+            }
+          }
+        } else if (ev.type === 'status_update') {
+          try {
+            await query('UPDATE whatsapp_messages SET status = ? WHERE kapso_message_id = ?', [
+              ev.status,
+              ev.messageId,
+            ]);
+          } catch (stErr) {}
+        }
+      }
+
+      return sendJson(res, 200, { success: true, processedEvents: events.length });
+    }
+
+    // -----------------------------------------------------------------
+    // 11. REST API: Kapso WhatsApp Chat (Send & Fetch History)
+    // -----------------------------------------------------------------
+    if (pathname === '/api/whatsapp/messages' && method === 'GET') {
+      try {
+        const phone = parsedUrl.query.phone ? formatWhatsAppNumber(parsedUrl.query.phone) : '';
+        const leadId = parsedUrl.query.leadId || '';
+        const ticketId = parsedUrl.query.ticketId || '';
+
+        let sql = 'SELECT * FROM whatsapp_messages WHERE 1=1';
+        const params = [];
+
+        if (leadId) {
+          sql += ' AND (lead_id = ? OR phone_number LIKE ?)';
+          params.push(leadId, `%${phone.slice(-10)}`);
+        } else if (ticketId) {
+          sql += ' AND (ticket_id = ? OR phone_number LIKE ?)';
+          params.push(ticketId, `%${phone.slice(-10)}`);
+        } else if (phone) {
+          sql += ' AND phone_number LIKE ?';
+          params.push(`%${phone.slice(-10)}`);
+        }
+
+        sql += ' ORDER BY created_at ASC LIMIT 100';
+
+        const rows = await query(sql, params);
+        return sendJson(res, 200, rows || []);
+      } catch (err) {
+        return sendJson(res, 500, { error: 'Failed to fetch WhatsApp messages: ' + err.message });
+      }
+    }
+
+    if (pathname === '/api/whatsapp/send' && method === 'POST') {
+      try {
+        const data = await parseJsonBody(req);
+        const { leadId, ticketId, to, text, templateName, senderId, senderName } = data;
+
+        if (!to || (!text && !templateName)) {
+          return sendJson(res, 400, { error: 'Destination phone number and text/template are required' });
+        }
+
+        // 1. Dispatch through Kapso AI WhatsApp Cloud API
+        const kapsoResult = await sendWhatsAppMessage({
+          to,
+          text,
+          templateName,
+        });
+
+        // 2. Persist in MySQL whatsapp_messages
+        const msgId = `wa_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+        const kapsoMsgId = kapsoResult.messages?.[0]?.id || null;
+        const cleanPhone = formatWhatsAppNumber(to);
+
+        await query(
+          `INSERT INTO whatsapp_messages (id, lead_id, ticket_id, phone_number, direction, sender_id, sender_name, message_type, content, status, kapso_message_id)
+           VALUES (?, ?, ?, ?, 'outbound', ?, ?, ?, ?, 'sent', ?)`,
+          [
+            msgId,
+            leadId || null,
+            ticketId || null,
+            cleanPhone,
+            senderId || 'staff',
+            senderName || 'Vakil Staff',
+            templateName ? 'template' : 'text',
+            String(text || `Template: ${templateName}`).trim(),
+            kapsoMsgId,
+          ]
+        );
+
+        // 3. Log to Lead / Ticket timeline
+        if (leadId) {
+          try {
+            const rows = await query('SELECT communication_notes FROM leads WHERE id = ?', [leadId]);
+            if (rows && rows.length > 0) {
+              let notes = { notes: [], call_logs: [], meetings: [], activity_logs: [] };
+              if (rows[0].communication_notes) {
+                notes = typeof rows[0].communication_notes === 'string'
+                  ? JSON.parse(rows[0].communication_notes)
+                  : rows[0].communication_notes;
+              }
+              const logEntry = {
+                id: `act_${Date.now()}`,
+                action: 'WhatsApp Sent',
+                details: `Outbound WhatsApp: "${(text || templateName).slice(0, 100)}"`,
+                created_by: senderName || 'Staff',
+                created_at: new Date().toISOString(),
+              };
+              notes.activity_logs = [logEntry, ...(notes.activity_logs || [])];
+              await query('UPDATE leads SET communication_notes = ?, updated_at = NOW() WHERE id = ?', [
+                JSON.stringify(notes),
+                leadId,
+              ]);
+            }
+          } catch (timelineErr) {
+            console.warn('Could not update lead communication_notes for WhatsApp:', timelineErr.message);
+          }
+        }
+
+        const [created] = await query('SELECT * FROM whatsapp_messages WHERE id = ?', [msgId]);
+        return sendJson(res, 201, {
+          success: true,
+          message: created || { id: msgId, content: text, status: 'sent' },
+          kapso: kapsoResult,
+        });
+      } catch (err) {
+        console.error('Failed to send WhatsApp message via Kapso:', err);
+        return sendJson(res, 500, { error: 'Failed to send WhatsApp message: ' + err.message });
+      }
+    }
+
     // Not Found
     return sendJson(res, 404, { error: 'Route not found' });
   } catch (globalErr) {
@@ -445,6 +643,8 @@ server.listen(PORT, async () => {
   console.log(`🚀 Vakil Lead Flow CRM & Telephony Server running on port ${PORT}`);
   console.log(`Database: MySQL Engine (mysql2/promise)`);
   console.log(`Inbound Dialplan: http://localhost:${PORT}/webhooks/smartflo/dialplan`);
+  console.log(`WhatsApp API:     http://localhost:${PORT}/api/whatsapp/messages`);
+  console.log(`WhatsApp Webhook: http://localhost:${PORT}/webhooks/whatsapp`);
   console.log(`Leads REST API:   http://localhost:${PORT}/api/leads`);
   console.log(`Tickets REST API: http://localhost:${PORT}/api/tickets`);
   console.log(`Health Check:     http://localhost:${PORT}/api/health`);

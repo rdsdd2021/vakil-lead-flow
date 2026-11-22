@@ -47,7 +47,8 @@ Comprehensive technical, operational, and architectural documentation is availab
 | Document | Purpose & Scope |
 | :--- | :--- |
 | 📜 **[TIMELINE.md](file:///C:/Users/Ramanuj%20Dey%20Sarkar/Downloads/vakil-lead-flow-main/vakil-lead-flow-main/docs/TIMELINE.md)** | **Engineering Evolution Timeline**: In-depth history across Phases 1 through 9 covering telephony diagnostics, recording fixes, AWS decoupling, and number migration. |
-| 🏷️ **[CHANGELOG.md](file:///C:/Users/Ramanuj%20Dey%20Sarkar/Downloads/vakil-lead-flow-main/vakil-lead-flow-main/docs/CHANGELOG.md)** | **Release Notes (SemVer)**: Full version history from `v1.0.0` to `v2.2.0` documenting Added, Changed, Fixed, and Removed items. |
+| 🏷️ **[CHANGELOG.md](file:///C:/Users/Ramanuj%20Dey%20Sarkar/Downloads/vakil-lead-flow-main/vakil-lead-flow-main/docs/CHANGELOG.md)** | **Release Notes (SemVer)**: Full version history from `v1.0.0` to `v2.4.0` documenting Added, Changed, Fixed, and Removed items. |
+| 💬 **[KAPSO_WHATSAPP_INTEGRATION_GUIDE.md](file:///C:/Users/Ramanuj%20Dey%20Sarkar/Downloads/vakil-lead-flow-main/vakil-lead-flow-main/docs/KAPSO_WHATSAPP_INTEGRATION_GUIDE.md)** | **Kapso AI WhatsApp Integration**: End-to-end guide for in-CRM WhatsApp messaging, Cloud API v24.0, webhooks, MySQL persistence, and legal reply templates. |
 | 🏛️ **[ARCHITECTURE.md](file:///C:/Users/Ramanuj%20Dey%20Sarkar/Downloads/vakil-lead-flow-main/vakil-lead-flow-main/docs/ARCHITECTURE.md)** | **System Architecture**: High-level design, `localStorage` schema, cross-tab reactive synchronization engine, and RBAC matrix. |
 | 📞 **[TELEPHONY_INTEGRATION_GUIDE.md](file:///C:/Users/Ramanuj%20Dey%20Sarkar/Downloads/vakil-lead-flow-main/vakil-lead-flow-main/docs/TELEPHONY_INTEGRATION_GUIDE.md)** | **Tata Smartflo Guide**: Pilot DID configuration, click-to-call bridging, dynamic `/api/dialplan` webhook spec, and `/api/recording` audio streaming proxy. |
 | 📖 **[USER_AND_ADMIN_MANUAL.md](file:///C:/Users/Ramanuj%20Dey%20Sarkar/Downloads/vakil-lead-flow-main/vakil-lead-flow-main/docs/USER_AND_ADMIN_MANUAL.md)** | **Operations Manual**: User guide for leads, tickets, follow-ups, click-to-call dialing, and changing profile calling numbers. |
@@ -79,6 +80,12 @@ Comprehensive technical, operational, and architectural documentation is availab
 * Complete MySQL relational database support powered by `mysql2/promise` with connection pooling.
 * Automated database migration and seeding via `npm run db:init` ([database/schema.sql](file:///C:/Users/Ramanuj%20Dey%20Sarkar/Downloads/vakil-lead-flow-main/vakil-lead-flow-main/database/schema.sql)).
 * Dual-tier resilience: live real-time sync with MySQL REST API (`npm run server`) + offline browser storage fallback.
+
+### 6. In-CRM WhatsApp Chat Integration (Kapso AI)
+* Real-time two-way WhatsApp client chat embedded natively into CRM lead cards, lead details, and active legal matters.
+* Powered by **Kapso AI** Meta WhatsApp Cloud API `v24.0` with incoming webhook receivers and persistent MySQL storage (`whatsapp_messages`).
+* 1-click legal reply templates (Consultation Welcome, Document Request, Draft Review, Hearing Notice, Fee Settlement).
+* Interactive live polling every 4 seconds, message delivery checkmarks, and automated activity logging.
 
 ---
 

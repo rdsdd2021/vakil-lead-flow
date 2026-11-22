@@ -289,6 +289,7 @@ const TicketCard = ({
         name={ticket.client_name}
         service={ticket.service_type}
         leadId={ticket.client_id}
+        ticketId={ticket.ticket_id}
         onFollowup={async (date, note) => {
           console.log('Tickets: onFollowup triggered by QuickActions', { date, note });
           const history = ticket.followup_history ? (typeof ticket.followup_history === 'string' ? JSON.parse(ticket.followup_history) : ticket.followup_history) : [];

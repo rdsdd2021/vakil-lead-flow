@@ -259,46 +259,101 @@ The `/api/recording` endpoint proxies the audio file and intercepts headers:
 
 ---
 
-## 5. Directory Structure & Key Files
+## 5. In-CRM WhatsApp Messaging Subsystem (Kapso AI)
+
+### 5.1 Architectural Workflow
+The WhatsApp messaging subsystem allows advocates and front desk staff to converse with clients directly inside the CRM.
+- **Outbound**: UI sends message via `POST /api/whatsapp/send` -> Express server calls Kapso WhatsApp Cloud API (`https://api.kapso.ai/meta/whatsapp/v24.0/{phone_number_id}/messages`) -> message delivered to customer WhatsApp.
+- **Inbound**: Customer replies -> Kapso webhook dispatches to `POST /webhooks/whatsapp` -> server parses payload, looks up matching lead/ticket, and inserts record into MySQL `whatsapp_messages` table.
+- **Client Reactive Polling**: The in-CRM `WhatsAppChatDialog` polls `GET /api/whatsapp/messages` every 4 seconds while active to render inbound replies dynamically without manual page refresh.
+- **Fallback Simulation Engine**: If `KAPSO_API_KEY` is not populated or contains placeholder tokens, `backend/kapso/whatsapp.js` activates sandbox simulation mode, recording simulated message IDs and acknowledging requests locally.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Advocate as Staff / Advocate (CRM)
+    participant Dialog as WhatsAppChatDialog (React)
+    participant Server as Express Server (/api/whatsapp)
+    participant DB as MySQL (`whatsapp_messages`)
+    participant Kapso as Kapso AI WhatsApp Cloud API
+    actor Client as Client (WhatsApp App)
+
+    Advocate->>Dialog: Types message or selects Legal Template
+    Dialog->>Server: POST /api/whatsapp/send
+    Server->>Kapso: POST /{phone_number_id}/messages (Bearer Auth)
+    Kapso-->>Client: Delivers message to client WhatsApp
+    Kapso-->>Server: Returns wamid and status=sent
+    Server->>DB: INSERT INTO whatsapp_messages (status='sent')
+    Server-->>Dialog: Response { success: true, messageId }
+    Dialog->>Dialog: Appends message to view with delivery checkmark
+
+    Note over Client,Dialog: Client replies on WhatsApp
+    Client->>Kapso: Inbound reply text
+    Kapso->>Server: Webhook POST /webhooks/whatsapp
+    Server->>DB: INSERT INTO whatsapp_messages (direction='inbound')
+    Server->>DB: UPDATE leads SET communication_notes = ...
+    Dialog->>Server: GET /api/whatsapp/messages (4s poll)
+    Server-->>Dialog: Returns updated message list with inbound reply
+    Dialog->>Advocate: Renders client reply bubble & plays alert
+```
+
+---
+
+## 6. Directory Structure & Key Files
 
 ```
 vakil-lead-flow-main/
-├── api/                                # Vercel Serverless Functions
-│   ├── dialplan.js                     # Smartflo Dynamic Dialplan Webhook
-│   └── recording.js                    # HTTP 206 Seekable Call Recording Proxy
-├── backend/                            # Standalone Telephony Support Microservice
+├── .env.example                         # Environment Variables Template
+├── api/                                 # Vercel Serverless Functions
+│   ├── dialplan.js                      # Smartflo Dynamic Dialplan Webhook
+│   └── recording.js                     # HTTP 206 Seekable Call Recording Proxy
+├── backend/                             # Backend Servers & External Integrations
+│   ├── kapso/
+│   │   └── whatsapp.js                  # Kapso AI WhatsApp Cloud API Integration Module
+│   ├── scripts/
+│   │   └── init-db.js                   # MySQL Schema Migration & Database Seeding Script
 │   └── smartflo/
-│       ├── server.js                   # Node.js fallback server for dialplan
+│       ├── server.js                    # Express MySQL REST & Telephony Server
 │       └── smartflo-dialplan-webhook.js
-├── docs/                               # Comprehensive Documentation Suite
-│   ├── TIMELINE.md                     # Engineering & Evolution History
-│   ├── CHANGELOG.md                    # SemVer Release Notes
-│   ├── ARCHITECTURE.md                 # System Architecture (This file)
-│   ├── TELEPHONY_INTEGRATION_GUIDE.md  # Tata Smartflo Technical Manual
-│   ├── USER_AND_ADMIN_MANUAL.md        # Staff Operations & User Guide
-│   └── DEPLOYMENT_AND_RUNBOOK.md       # Build, Deploy & Recovery Runbook
+├── database/
+│   ├── schema.sql                       # Complete MySQL DDL Schema
+│   └── seed.sql                         # Initial Seed Data for Users & Directory
+├── docs/                                # Comprehensive Documentation Suite
+│   ├── TIMELINE.md                      # Engineering & Evolution History
+│   ├── CHANGELOG.md                     # SemVer Release Notes
+│   ├── ARCHITECTURE.md                  # System Architecture (This file)
+│   ├── KAPSO_WHATSAPP_INTEGRATION_GUIDE.md # Kapso AI WhatsApp Integration Manual
+│   ├── TELEPHONY_INTEGRATION_GUIDE.md   # Tata Smartflo Technical Manual
+│   ├── USER_AND_ADMIN_MANUAL.md         # Staff Operations & User Guide
+│   ├── USER_ROLES_AND_WORKFLOWS.md      # Permissions & Userflow Diagrams
+│   └── DEPLOYMENT_AND_RUNBOOK.md        # Build, Deploy & Recovery Runbook
 ├── src/
-│   ├── components/                     # Reusable UI & Business Components
-│   │   ├── SmartfloCallDialog.tsx      # Outbound Click-to-Call Modal
+│   ├── components/                      # Reusable UI & Business Components
+│   │   ├── SmartfloCallDialog.tsx       # Outbound Click-to-Call Modal
+│   │   ├── WhatsAppChatDialog.tsx       # Interactive In-CRM WhatsApp Chat Modal
+│   │   ├── QuickActions.tsx             # Universal Call, WhatsApp & Payment Toolbar
 │   │   ├── SmartfloDialplanSettings.tsx # Webhook Inbound Tester
-│   │   ├── StatusBadges.tsx            # Visual Pipeline Indicators
-│   │   └── ui/                         # shadcn/ui Component Primitives
+│   │   ├── StatusBadges.tsx             # Visual Pipeline Indicators
+│   │   └── ui/                          # shadcn/ui Component Primitives
 │   ├── contexts/
-│   │   └── CRMContext.tsx              # Core LocalStorage & Reactivity Engine
+│   │   └── CRMContext.tsx               # Core MySQL & LocalStorage Reactivity Engine
 │   ├── data/
-│   │   └── mockData.ts                 # Production Role Definitions
+│   │   └── mockData.ts                  # Production Role Definitions
 │   ├── lib/
-│   │   ├── smartflo.ts                 # Telephony Configuration & API Clients
-│   │   └── pushNotifications.ts        # Browser Push Notification Manager
-│   ├── pages/                          # Primary Routed Views
-│   │   ├── LeadsDashboard.tsx          # Kanban & Lead Triage
-│   │   ├── LeadIntake.tsx              # Public & Staff Client Intake Portal (/intake)
-│   │   ├── Tickets.tsx                 # Case Matter & Billing Management
-│   │   ├── FollowUps.tsx               # Scheduled Callback Reminders
-│   │   ├── Login.tsx                   # Hardened Credential Authentication
-│   │   └── MorePage.tsx                # User Profile & Calling Number Controls
+│   │   ├── kapso.ts                     # Frontend Kapso AI Client & Legal Templates
+│   │   ├── smartflo.ts                  # Telephony Configuration & API Clients
+│   │   └── pushNotifications.ts         # Browser Push Notification Manager
+│   ├── pages/                           # Primary Routed Views
+│   │   ├── LeadsDashboard.tsx           # Kanban & Lead Triage
+│   │   ├── LeadDetail.tsx               # Lead Profiling & WhatsApp Chat Banner
+│   │   ├── LeadIntake.tsx               # Public & Staff Client Intake Portal (/intake)
+│   │   ├── Tickets.tsx                  # Case Matter & Billing Management
+│   │   ├── TicketDetail.tsx             # Legal Case Files & WhatsApp Messenger
+│   │   ├── FollowUps.tsx                # Scheduled Callback Reminders
+│   │   ├── Login.tsx                    # Hardened Credential Authentication
+│   │   └── MorePage.tsx                 # User Profile & Calling Number Controls
 │   └── types/
-│       └── crm.ts                      # TypeScript Domain Models
-├── README.md                           # Master Project Overview
-└── vercel.json                         # Vercel Deployment & Routing Configuration
+│       └── crm.ts                       # TypeScript Domain Models
+├── README.md                            # Master Project Overview
+└── vercel.json                          # Vercel Deployment & Routing Configuration
 ```

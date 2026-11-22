@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Phone, MessageCircle, Link2, Calendar as CalendarIcon, ChevronRight, ShieldCheck } from 'lucide-react';
+import { Phone, MessageCircle, Link2, Calendar as CalendarIcon, ChevronRight, ShieldCheck, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -11,6 +11,7 @@ import { format } from 'date-fns';
 import { ServiceType, SERVICE_LABELS } from '@/types/crm';
 import { useCRM } from '@/contexts/CRMContext';
 import { SmartfloCallDialog } from '@/components/SmartfloCallDialog';
+import { WhatsAppChatDialog } from '@/components/WhatsAppChatDialog';
 import { maskPhoneNumber } from '@/lib/smartflo';
 
 interface WhatsAppTemplate {
@@ -70,12 +71,13 @@ interface QuickActionsProps {
   name: string;
   service?: ServiceType;
   leadId?: string;
+  ticketId?: string;
   onPaymentLink?: () => void;
   onFollowup?: (date: Date, note?: string) => void;
   compact?: boolean;
 }
 
-export const QuickActions = ({ whatsapp_number, name, service, leadId, onPaymentLink, onFollowup, compact }: QuickActionsProps) => {
+export const QuickActions = ({ whatsapp_number, name, service, leadId, ticketId, onPaymentLink, onFollowup, compact }: QuickActionsProps) => {
   const { addActivityLog, currentRole } = useCRM();
   const [followupDate, setFollowupDate] = useState<Date>();
   const [followupTime, setFollowupTime] = useState('09:00');
@@ -83,6 +85,7 @@ export const QuickActions = ({ whatsapp_number, name, service, leadId, onPayment
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [waPopoverOpen, setWaPopoverOpen] = useState(false);
   const [callDialogOpen, setCallDialogOpen] = useState(false);
+  const [chatDialogOpen, setChatDialogOpen] = useState(false);
 
   const serviceLabel = service ? SERVICE_LABELS[service] : undefined;
   const isSuperAdmin = currentRole === 'super_admin';
@@ -151,7 +154,7 @@ export const QuickActions = ({ whatsapp_number, name, service, leadId, onPayment
     <Popover open={waPopoverOpen} onOpenChange={setWaPopoverOpen}>
       <PopoverTrigger asChild>
         {compact ? (
-          <Button size="icon" variant="ghost" className="h-9 w-9 rounded-xl bg-success/10 text-success hover:bg-success/20">
+          <Button size="icon" variant="ghost" className="h-9 w-9 rounded-xl bg-success/10 text-success hover:bg-success/20" title="WhatsApp Messaging (Kapso AI)">
             <MessageCircle className="w-4 h-4" />
           </Button>
         ) : (
@@ -162,38 +165,63 @@ export const QuickActions = ({ whatsapp_number, name, service, leadId, onPayment
         )}
       </PopoverTrigger>
       <PopoverContent className="w-72 p-0" align="start" side="top">
-        <div className="p-3 pb-2">
-          <p className="text-xs font-semibold mb-0.5">Send WhatsApp Message</p>
-          <p className="text-[10px] text-muted-foreground">Choose a template or send custom</p>
+        <div className="p-3 pb-2 border-b">
+          <div className="flex items-center justify-between mb-0.5">
+            <p className="text-xs font-semibold">WhatsApp Client Chat</p>
+            <span className="text-[9px] bg-success/20 text-success font-semibold px-1.5 py-0.5 rounded">Kapso AI</span>
+          </div>
+          <p className="text-[10px] text-muted-foreground">Interact directly inside CRM or via web</p>
         </div>
-        <div className="px-2 pb-2">
+
+        <div className="p-2 space-y-1.5">
+          {/* Primary In-CRM Chat Trigger */}
           <button
-            onClick={() => { handleWhatsAppDirect(); setWaPopoverOpen(false); }}
-            className="w-full flex items-center gap-2.5 p-2.5 rounded-lg hover:bg-muted/60 transition-colors text-left"
+            onClick={() => { setChatDialogOpen(true); setWaPopoverOpen(false); }}
+            className="w-full flex items-center gap-2.5 p-2 rounded-lg bg-success/10 hover:bg-success/20 text-success transition-all text-left border border-success/30 group"
           >
-            <div className="w-8 h-8 rounded-full bg-success/10 flex items-center justify-center shrink-0">
-              <MessageCircle className="w-4 h-4 text-success" />
+            <div className="w-8 h-8 rounded-lg bg-success text-white flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+              <MessageCircle className="w-4 h-4" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium">Custom Message</p>
-              <p className="text-[10px] text-muted-foreground">Write your own message</p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-xs font-semibold text-foreground">In-CRM Live Chat</p>
+                <span className="text-[9px] px-1 py-0.2 bg-success text-white rounded font-medium">Inbuilt</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground">Interactive chat history & live messaging</p>
+            </div>
+            <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+          </button>
+
+          {/* External WhatsApp Web Trigger */}
+          <button
+            onClick={() => { handleWhatsAppDirect(); setWaPopoverOpen(false); }}
+            className="w-full flex items-center gap-2.5 p-2 rounded-lg hover:bg-muted/60 transition-colors text-left"
+          >
+            <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+              <ExternalLink className="w-4 h-4 text-muted-foreground" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium">Open WhatsApp Web</p>
+              <p className="text-[10px] text-muted-foreground">External wa.me chat link</p>
             </div>
             <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
           </button>
         </div>
-        <div className="border-t px-2 py-2 space-y-0.5 max-h-64 overflow-y-auto">
+
+        <div className="border-t px-2 py-2 space-y-0.5 max-h-56 overflow-y-auto">
+          <p className="text-[10px] font-semibold text-muted-foreground px-1 pb-1">Quick Legal Templates</p>
           {whatsappTemplates.map(template => (
             <button
               key={template.id}
               onClick={() => handleWhatsAppTemplate(template)}
-              className="w-full flex items-center gap-2.5 p-2.5 rounded-lg hover:bg-muted/60 transition-colors text-left"
+              className="w-full flex items-center gap-2.5 p-2 rounded-lg hover:bg-muted/60 transition-colors text-left"
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
                   <p className="text-xs font-medium">{template.label}</p>
                   <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">{template.stage}</span>
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">
+                <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">
                   {template.getMessage(name, serviceLabel)}
                 </p>
               </div>
@@ -268,6 +296,18 @@ export const QuickActions = ({ whatsapp_number, name, service, leadId, onPayment
     />
   ) : null;
 
+  const chatDialog = chatDialogOpen ? (
+    <WhatsAppChatDialog
+      open={chatDialogOpen}
+      onOpenChange={setChatDialogOpen}
+      clientName={name}
+      rawPhoneNumber={whatsapp_number}
+      leadId={leadId}
+      ticketId={ticketId}
+      serviceTitle={serviceLabel}
+    />
+  ) : null;
+
   if (compact) {
     return (
       <>
@@ -282,6 +322,7 @@ export const QuickActions = ({ whatsapp_number, name, service, leadId, onPayment
           {followupButton}
         </div>
         {callDialog}
+        {chatDialog}
       </>
     );
   }
@@ -301,6 +342,7 @@ export const QuickActions = ({ whatsapp_number, name, service, leadId, onPayment
         {followupButton}
       </div>
       {callDialog}
+      {chatDialog}
     </>
   );
 };

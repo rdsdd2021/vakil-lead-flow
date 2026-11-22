@@ -143,3 +143,26 @@ CREATE TABLE IF NOT EXISTS `push_subscriptions` (
   PRIMARY KEY (`id`),
   KEY `idx_push_user` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -------------------------------------------------------------------
+-- 7. Table: whatsapp_messages (Kapso AI WhatsApp Cloud Chat History)
+-- -------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `whatsapp_messages` (
+  `id` VARCHAR(64) NOT NULL,
+  `lead_id` VARCHAR(64) DEFAULT NULL,
+  `ticket_id` VARCHAR(64) DEFAULT NULL,
+  `phone_number` VARCHAR(50) NOT NULL,
+  `direction` ENUM('inbound', 'outbound') NOT NULL DEFAULT 'outbound',
+  `sender_id` VARCHAR(64) DEFAULT NULL,
+  `sender_name` VARCHAR(255) DEFAULT NULL,
+  `message_type` VARCHAR(50) DEFAULT 'text',
+  `content` TEXT NOT NULL,
+  `status` ENUM('pending', 'sent', 'delivered', 'read', 'failed') DEFAULT 'sent',
+  `kapso_message_id` VARCHAR(128) DEFAULT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_wa_phone` (`phone_number`),
+  KEY `idx_wa_lead` (`lead_id`),
+  KEY `idx_wa_ticket` (`ticket_id`),
+  KEY `idx_wa_created` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

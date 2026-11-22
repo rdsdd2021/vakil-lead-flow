@@ -10,12 +10,13 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { ArrowLeft, MapPin, Phone, User, FileText, Clock, Scale, Pencil, Check, X, IndianRupee, ShieldCheck, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, MapPin, Phone, User, FileText, Clock, Scale, Pencil, Check, X, IndianRupee, ShieldCheck, Eye, EyeOff, MessageCircle } from 'lucide-react';
 import { LEAD_STATUS_LABELS, LeadStatus, SERVICE_PRICES } from '@/types/crm';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { sendPushNotification } from '@/lib/pushNotifications';
 import { maskPhoneNumber, SMARTFLO_CONFIG } from '@/lib/smartflo';
+import { WhatsAppChatDialog } from '@/components/WhatsAppChatDialog';
 
 const LeadDetail = () => {
   const { id } = useParams();
@@ -32,6 +33,7 @@ const LeadDetail = () => {
   const [advanceAmount, setAdvanceAmount] = useState('');
   const [selectedLawyerId, setSelectedLawyerId] = useState<string>('');
   const [revealPhone, setRevealPhone] = useState(false);
+  const [chatDialogOpen, setChatDialogOpen] = useState(false);
 
 
 
@@ -249,6 +251,32 @@ const LeadDetail = () => {
             });
           }}
         />
+
+        {/* In-CRM WhatsApp Chat Banner */}
+        <Card className="p-3.5 bg-gradient-to-r from-success/10 via-success/5 to-background border-success/30 rounded-xl shadow-xs">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-success text-white flex items-center justify-center shrink-0 shadow-xs">
+                <MessageCircle className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <h4 className="text-xs font-semibold text-foreground truncate">WhatsApp Chat</h4>
+                  <span className="text-[9px] bg-success/20 text-success font-semibold px-1.5 py-0.2 rounded">Kapso AI</span>
+                </div>
+                <p className="text-[11px] text-muted-foreground truncate">Live two-way messaging with {lead.name}</p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              className="h-8 px-3 rounded-lg bg-success hover:bg-success/90 text-success-foreground text-xs gap-1.5 shrink-0 shadow-xs"
+              onClick={() => setChatDialogOpen(true)}
+            >
+              <MessageCircle className="w-3.5 h-3.5" />
+              Open Chat
+            </Button>
+          </div>
+        </Card>
 
         {/* Lead Info */}
         <Card className="p-4 space-y-3">
@@ -493,6 +521,16 @@ const LeadDetail = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* In-CRM WhatsApp Chat Dialog */}
+      <WhatsAppChatDialog
+        open={chatDialogOpen}
+        onOpenChange={setChatDialogOpen}
+        leadId={id}
+        clientName={lead.name}
+        rawPhoneNumber={lead.whatsapp_number}
+        serviceTitle={lead.service}
+      />
     </div>
   );
 };
