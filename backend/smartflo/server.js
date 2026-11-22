@@ -601,9 +601,17 @@ const server = http.createServer(async (req, res) => {
 
       // Merge Cloud messages into inMemory store
       for (const cm of cloudMsgs) {
-        const idx = inMemoryWhatsAppMessages.findIndex(m => m.id === cm.id || (m.kapso_message_id && m.kapso_message_id === cm.id));
+        const idx = inMemoryWhatsAppMessages.findIndex(m => 
+          (m.kapso_message_id && (m.kapso_message_id === cm.id || m.kapso_message_id === cm.kapso_message_id)) ||
+          m.id === cm.id
+        );
         if (idx >= 0) {
-          inMemoryWhatsAppMessages[idx] = { ...inMemoryWhatsAppMessages[idx], ...cm };
+          const ex = inMemoryWhatsAppMessages[idx];
+          inMemoryWhatsAppMessages[idx] = { 
+            ...ex, 
+            ...cm, 
+            sender_name: cm.direction === 'outbound' ? (ex.sender_name || 'Staff') : cm.sender_name 
+          };
         } else {
           inMemoryWhatsAppMessages.push({ ...cm, lead_id: leadId || null, ticket_id: ticketId || null });
         }
@@ -629,10 +637,21 @@ const server = http.createServer(async (req, res) => {
 
         const rows = await query(sql, params);
         if (rows && rows.length > 0) {
-          // Merge with Cloud messages
+          // Merge with Cloud messages using canonical key
           const map = new Map();
-          for (const r of rows) map.set(r.id, r);
-          for (const m of cloudMsgs) map.set(m.id, { ...(map.get(m.id) || {}), ...m });
+          for (const r of rows) {
+            const key = r.kapso_message_id || r.id;
+            map.set(key, r);
+          }
+          for (const m of cloudMsgs) {
+            const key = m.kapso_message_id || m.id;
+            const existing = map.get(key) || {};
+            map.set(key, { 
+              ...existing, 
+              ...m, 
+              sender_name: m.direction === 'outbound' ? (existing.sender_name || 'Staff') : m.sender_name 
+            });
+          }
           const combined = Array.from(map.values()).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
           return sendJson(res, 200, combined);
         }
@@ -648,10 +667,21 @@ const server = http.createServer(async (req, res) => {
         return false;
       });
 
-      // Deduplicate and sort chronologically
+      // Deduplicate using canonical key (kapso_message_id || id) and sort chronologically
       const map = new Map();
-      for (const m of matched) map.set(m.id, m);
-      for (const m of cloudMsgs) map.set(m.id, { ...(map.get(m.id) || {}), ...m });
+      for (const m of matched) {
+        const key = m.kapso_message_id || m.id;
+        map.set(key, m);
+      }
+      for (const m of cloudMsgs) {
+        const key = m.kapso_message_id || m.id;
+        const existing = map.get(key) || {};
+        map.set(key, { 
+          ...existing, 
+          ...m, 
+          sender_name: m.direction === 'outbound' ? (existing.sender_name || 'Staff') : m.sender_name 
+        });
+      }
       const finalSorted = Array.from(map.values()).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
       return sendJson(res, 200, finalSorted);
@@ -698,9 +728,9 @@ const server = http.createServer(async (req, res) => {
           });
         }
 
-        // 2. Prepare standardized message entity
-        const msgId = `wa_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+        // 2. Prepare standardized message entity using canonical Meta WAMID as primary ID
         const kapsoMsgId = kapsoResult.messages?.[0]?.id || null;
+        const msgId = kapsoMsgId || `wa_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
         const cleanPhone = formatWhatsAppNumber(to);
 
         const savedMessage = {
@@ -718,8 +748,15 @@ const server = http.createServer(async (req, res) => {
           created_at: new Date().toISOString(),
         };
 
-        // Cache in memory immediately
-        inMemoryWhatsAppMessages.push(savedMessage);
+        // Cache in memory (update if existing or push new)
+        const existIdx = inMemoryWhatsAppMessages.findIndex(m => 
+          (m.kapso_message_id && m.kapso_message_id === kapsoMsgId) || m.id === msgId
+        );
+        if (existIdx >= 0) {
+          inMemoryWhatsAppMessages[existIdx] = savedMessage;
+        } else {
+          inMemoryWhatsAppMessages.push(savedMessage);
+        }
 
         // 3. Gracefully persist in MySQL (wrapped so db errors never fail outbound messages)
         try {

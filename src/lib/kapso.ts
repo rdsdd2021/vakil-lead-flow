@@ -101,8 +101,21 @@ export async function fetchWhatsAppMessages(
           try {
             const cached: WhatsAppMessage[] = JSON.parse(cachedRaw);
             const map = new Map<string, WhatsAppMessage>();
-            for (const item of cached) { if (item.id) map.set(item.id, item); }
-            for (const item of data) { if (item.id) map.set(item.id, item); }
+            for (const item of cached) {
+              const key = item.kapso_message_id || item.id;
+              if (key) map.set(key, item);
+            }
+            for (const item of data) {
+              const key = item.kapso_message_id || item.id;
+              if (key) {
+                const ex = map.get(key);
+                map.set(key, {
+                  ...ex,
+                  ...item,
+                  sender_name: item.direction === 'outbound' ? (ex?.sender_name || item.sender_name || 'Staff') : item.sender_name,
+                });
+              }
+            }
             merged = Array.from(map.values()).sort((a, b) => 
               new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
             );
@@ -168,7 +181,10 @@ export async function sendWhatsAppMessageApi({
       // Update local cache
       const cacheKey = `wa_history_${leadId || ticketId || to || 'global'}`;
       const existing: WhatsAppMessage[] = JSON.parse(localStorage.getItem(cacheKey) || '[]');
-      const updated = [...existing, json.message];
+      const newMsg = json.message;
+      const newKey = newMsg.kapso_message_id || newMsg.id;
+      const filtered = existing.filter(m => (m.kapso_message_id || m.id) !== newKey);
+      const updated = [...filtered, newMsg];
       localStorage.setItem(cacheKey, JSON.stringify(updated));
 
       return {

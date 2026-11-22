@@ -190,7 +190,7 @@ async function fetchKapsoConversationMessages(phone) {
                 id: msgId,
                 phone_number: item.kapso?.phone_number || item.from || item.to || cleanPhone,
                 direction: dir,
-                sender_name: item.kapso?.contact_name || (dir === 'inbound' ? 'Client' : 'Staff'),
+                sender_name: dir === 'inbound' ? (item.kapso?.contact_name || 'Client') : 'Staff',
                 message_type: item.type || 'text',
                 content: textContent,
                 status: waStatus,

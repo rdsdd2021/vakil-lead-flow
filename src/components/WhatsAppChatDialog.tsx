@@ -53,10 +53,28 @@ export const WhatsAppChatDialog: React.FC<WhatsAppChatDialogProps> = ({
     if (!quiet) setIsLoading(true);
     try {
       const history = await fetchWhatsAppMessages(leadId, ticketId, rawPhoneNumber);
-      setMessages(history);
+      
+      // Canonical deduplication by (kapso_message_id || id)
+      const dedupMap = new Map<string, WhatsAppMessage>();
+      for (const m of history) {
+        const k = m.kapso_message_id || m.id;
+        if (!dedupMap.has(k)) {
+          dedupMap.set(k, m);
+        } else {
+          const prev = dedupMap.get(k)!;
+          dedupMap.set(k, {
+            ...prev,
+            ...m,
+            sender_name: m.direction === 'outbound' ? (prev.sender_name && prev.sender_name !== clientName ? prev.sender_name : m.sender_name) : m.sender_name,
+            status: m.status === 'read' ? 'read' : (prev.status === 'read' ? 'read' : (m.status || prev.status)),
+          });
+        }
+      }
+      const dedupedList = Array.from(dedupMap.values()).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      setMessages(dedupedList);
 
       // Automatically mark unread incoming messages as read in Meta
-      for (const msg of history) {
+      for (const msg of dedupedList) {
         if (msg.direction === 'inbound' && msg.kapso_message_id) {
           markWhatsAppMessageReadApi(msg.kapso_message_id);
         }
@@ -105,7 +123,11 @@ export const WhatsAppChatDialog: React.FC<WhatsAppChatDialogProps> = ({
       });
 
       if (response.success) {
-        setMessages(prev => [...prev, response.message]);
+        setMessages(prev => {
+          const newKey = response.message.kapso_message_id || response.message.id;
+          const filtered = prev.filter(m => (m.kapso_message_id || m.id) !== newKey);
+          return [...filtered, response.message];
+        });
         if (leadId) {
           addActivityLog(
             leadId,
@@ -235,7 +257,9 @@ export const WhatsAppChatDialog: React.FC<WhatsAppChatDialogProps> = ({
                     )}
                     {isOutbound && (
                       <p className="text-[10px] font-medium text-emerald-200 mb-0.5">
-                        {msg.sender_name || currentUser.name}
+                        {(msg.sender_name && msg.sender_name !== clientName && msg.sender_name !== 'Staff') 
+                          ? msg.sender_name 
+                          : (currentUser?.name || 'Vakil Staff')}
                       </p>
                     )}
 
