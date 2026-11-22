@@ -2,9 +2,13 @@
   "name": "smartflo-backend",
   "version": "1.0.0",
   "type": "commonjs",
-  "description": "Tata Smartflo API Dialplan and Webhooks Server",
+  "description": "Tata Smartflo API Dialplan and Webhooks Server with MySQL Database",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "db:init": "node ../scripts/init-db.js"
+  },
+  "dependencies": {
+    "mysql2": "^3.12.0"
   }
 }

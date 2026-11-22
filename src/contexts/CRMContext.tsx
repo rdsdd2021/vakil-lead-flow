@@ -41,6 +41,8 @@ interface CRMContextType {
 import { mockLeads, mockTickets, mockUsers } from '@/data/mockData';
 import { AGENT_PHONE_DIRECTORY } from '@/lib/smartflo';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
 const CRMContext = createContext<CRMContextType | undefined>(undefined);
 
 export const CRMProvider = ({ children }: { children: ReactNode }) => {
@@ -151,6 +153,27 @@ export const CRMProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const fetchLeads = async () => {
+    // 1. Attempt MySQL REST API
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 2000);
+      const res = await fetch(`${API_BASE_URL}/api/leads`, { signal: controller.signal }).catch(() => null);
+      clearTimeout(timer);
+
+      if (res && res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setLeads(data);
+          localStorage.setItem('vakil_leads', JSON.stringify(data));
+          setIsLoadingLeads(false);
+          return;
+        }
+      }
+    } catch (e) {
+      // Offline fallback
+    }
+
+    // 2. Offline / LocalStorage Fallback
     try {
       const stored = localStorage.getItem('vakil_leads');
       if (stored) {
@@ -171,6 +194,27 @@ export const CRMProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const fetchTickets = async () => {
+    // 1. Attempt MySQL REST API
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 2000);
+      const res = await fetch(`${API_BASE_URL}/api/tickets`, { signal: controller.signal }).catch(() => null);
+      clearTimeout(timer);
+
+      if (res && res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setTickets(data);
+          localStorage.setItem('vakil_tickets', JSON.stringify(data));
+          setIsLoadingTickets(false);
+          return;
+        }
+      }
+    } catch (e) {
+      // Offline fallback
+    }
+
+    // 2. Offline / LocalStorage Fallback
     try {
       const stored = localStorage.getItem('vakil_tickets');
       if (stored) {
@@ -191,6 +235,26 @@ export const CRMProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const fetchLawyers = async () => {
+    // 1. Attempt MySQL REST API
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 2000);
+      const res = await fetch(`${API_BASE_URL}/api/users`, { signal: controller.signal }).catch(() => null);
+      clearTimeout(timer);
+
+      if (res && res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setUsers(data);
+          localStorage.setItem('vakil_users', JSON.stringify(data));
+          return;
+        }
+      }
+    } catch (e) {
+      // Offline fallback
+    }
+
+    // 2. Offline / LocalStorage Fallback
     try {
       const stored = localStorage.getItem('vakil_users');
       if (stored) {
@@ -236,21 +300,41 @@ export const CRMProvider = ({ children }: { children: ReactNode }) => {
       status: !leadData.status || String(leadData.status).toLowerCase() === 'new' ? 'NEW_LEAD' : leadData.status
     };
     
+    // Optimistic Local Update
     setLeads(prev => {
       const updated = [completeLead, ...prev];
       localStorage.setItem('vakil_leads', JSON.stringify(updated));
       return updated;
     });
     window.dispatchEvent(new Event('vakil_storage_sync'));
+
+    // Asynchronous MySQL Persistence
+    try {
+      fetch(`${API_BASE_URL}/api/leads`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(completeLead),
+      }).catch(err => console.warn('[CRM] MySQL background sync deferred (offline):', err.message));
+    } catch (e) {}
   };
 
   const updateLeadInServer = async (id: string, updates: Partial<Lead>) => {
+    // Optimistic Local Update
     setLeads(prev => {
       const updated = prev.map(l => l.id === id ? { ...l, ...updates, updated_at: new Date().toISOString() } : l);
       localStorage.setItem('vakil_leads', JSON.stringify(updated));
       return updated;
     });
     window.dispatchEvent(new Event('vakil_storage_sync'));
+
+    // Asynchronous MySQL Persistence
+    try {
+      fetch(`${API_BASE_URL}/api/leads/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      }).catch(err => console.warn('[CRM] MySQL background update deferred:', err.message));
+    } catch (e) {}
   };
 
   const addTicketToServer = async (ticketData: Omit<Ticket, 'created_at' | 'updated_at'>) => {
@@ -272,21 +356,41 @@ export const CRMProvider = ({ children }: { children: ReactNode }) => {
       updated_at: new Date().toISOString(),
     };
 
+    // Optimistic Local Update
     setTickets(prev => {
       const updated = [completeTicket, ...prev];
       localStorage.setItem('vakil_tickets', JSON.stringify(updated));
       return updated;
     });
     window.dispatchEvent(new Event('vakil_storage_sync'));
+
+    // Asynchronous MySQL Persistence
+    try {
+      fetch(`${API_BASE_URL}/api/tickets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(completeTicket),
+      }).catch(err => console.warn('[CRM] MySQL background ticket sync deferred:', err.message));
+    } catch (e) {}
   };
 
   const updateTicketInServer = async (id: string, updates: Partial<Ticket>) => {
+    // Optimistic Local Update
     setTickets(prev => {
       const updated = prev.map(t => t.ticket_id === id ? { ...t, ...updates, updated_at: new Date().toISOString() } : t);
       localStorage.setItem('vakil_tickets', JSON.stringify(updated));
       return updated;
     });
     window.dispatchEvent(new Event('vakil_storage_sync'));
+
+    // Asynchronous MySQL Persistence
+    try {
+      fetch(`${API_BASE_URL}/api/tickets/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      }).catch(err => console.warn('[CRM] MySQL background ticket update deferred:', err.message));
+    } catch (e) {}
   };
   
   // Follow-ups: only surface explicitly scheduled items from followup_history.
@@ -474,6 +578,26 @@ export const CRMProvider = ({ children }: { children: ReactNode }) => {
     } else if (ticket) {
       await updateTicketInServer(entityId, { communication_notes: JSON.stringify(updatedNotes) });
     }
+
+    // Mirror to MySQL activity_logs table
+    try {
+      fetch(`${API_BASE_URL}/api/activity-logs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: newLog.id,
+          entity_type: lead ? 'lead' : 'ticket',
+          entity_id: entityId,
+          action: newLog.action,
+          details: newLog.details,
+          call_duration: newLog.call_duration,
+          call_status: newLog.call_status,
+          recording_url: newLog.recording_url,
+          masked_number: newLog.masked_number,
+          created_by: newLog.created_by,
+        }),
+      }).catch(() => {});
+    } catch (e) {}
   };
 
   return (

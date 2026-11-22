@@ -74,9 +74,10 @@ Comprehensive technical, operational, and architectural documentation is availab
 * Public self-service form for walk-ins and web inquiries with automatic reference code generation (`VT-YYYY-XXXXX`).
 * Real-time cross-tab synchronization triggers instant updates on staff dashboards without page reloads.
 
-### 5. High-Speed LocalStorage Persistence Engine
-* Fully decoupled from remote cloud databases; data resides securely in browser storage (`vakil_leads`, `vakil_tickets`).
-* Instant sub-millisecond query performance and complete offline capability.
+### 5. MySQL Database & Hybrid LocalStorage Engine
+* Complete MySQL relational database support powered by `mysql2/promise` with connection pooling.
+* Automated database migration and seeding via `npm run db:init` ([database/schema.sql](file:///C:/Users/Ramanuj%20Dey%20Sarkar/Downloads/vakil-lead-flow-main/vakil-lead-flow-main/database/schema.sql)).
+* Dual-tier resilience: live real-time sync with MySQL REST API (`npm run server`) + offline browser storage fallback.
 
 ---
 
@@ -84,16 +85,26 @@ Comprehensive technical, operational, and architectural documentation is availab
 
 ```bash
 # 1. Clone repository
-git clone <REPOSITORY_URL>
-cd vakil-lead-flow-main
+git clone https://github.com/rdsdd2021/vakil-lead-flow.git
+cd vakil-lead-flow
 
 # 2. Install dependencies
 npm install
 
-# 3. Start local development server
+# 3. Configure environment
+cp .env.example .env
+# Edit .env with your MySQL settings (MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE)
+
+# 4. Initialize MySQL schema & default accounts
+npm run db:init
+
+# 5. Start MySQL backend & Tata Smartflo webhook server (Port 3001)
+npm run server
+
+# 6. Start Vite frontend dev server (Port 8080)
 npm run dev
 
-# 4. Type checking & production build verification
+# 7. Type checking & production build verification
 npx tsc --noEmit
 npm run build
 ```

@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [2.3.0] - 2026-11-22
+
+### Added
+* **MySQL Database Architecture**: Implemented full relational database support with MySQL/MariaDB using `mysql2/promise` with high-performance connection pooling.
+* **Database Schema & Seed Scripts**: Added [database/schema.sql](file:///C:/Users/Ramanuj%20Dey%20Sarkar/Downloads/vakil-lead-flow-main/vakil-lead-flow-main/database/schema.sql) with tables (`users`, `leads`, `tickets`, `follow_ups`, `activity_logs`, `push_subscriptions`) and [database/seed.sql](file:///C:/Users/Ramanuj%20Dey%20Sarkar/Downloads/vakil-lead-flow-main/vakil-lead-flow-main/database/seed.sql) with initial firm staff accounts.
+* **Automated Database Initialization**: Added [backend/scripts/init-db.js](file:///C:/Users/Ramanuj%20Dey%20Sarkar/Downloads/vakil-lead-flow-main/vakil-lead-flow-main/backend/scripts/init-db.js) executable via `npm run db:init` to create database tables and seed users automatically.
+* **Comprehensive REST API**: Expanded [backend/smartflo/server.js](file:///C:/Users/Ramanuj%20Dey%20Sarkar/Downloads/vakil-lead-flow-main/vakil-lead-flow-main/backend/smartflo/server.js) to provide full REST CRUD routes for `/api/leads`, `/api/tickets`, `/api/users`, `/api/activity-logs`, `/api/health`, and `/api/recording`.
+* **Telephony MySQL Webhooks**: Migrated hangup and missed call handlers from legacy PostgreSQL to MySQL, persisting call durations and recording URLs directly in the database.
+* **Hybrid Online/Offline Sync**: Updated [src/contexts/CRMContext.tsx](file:///C:/Users/Ramanuj%20Dey%20Sarkar/Downloads/vakil-lead-flow-main/vakil-lead-flow-main/src/contexts/CRMContext.tsx) to sync with the MySQL REST API while preserving instant local caching and offline resilience.
+
+---
+
 ## [2.2.0] - 2026-11-21
 
 ### Added

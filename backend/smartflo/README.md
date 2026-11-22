@@ -52,7 +52,12 @@ Set the following environment variables in AWS Lambda:
 | :--- | :--- | :--- |
 | `SMARTFLO_API_TOKEN` | Bearer token from Smartflo portal | `<YOUR_SMARTFLO_JWT_TOKEN>` |
 | `SMARTFLO_PILOT_NUMBER` | Virtual DID assigned by Tata Tele | `917900000000` |
-| `DATABASE_URL` | PostgreSQL connection string | `postgres://user:pass@host:5432/vakil` |
+| `DATABASE_URL` | MySQL connection string | `mysql://user:pass@localhost:3306/vakil_lead_flow` |
+| `MYSQL_HOST` | MySQL hostname | `localhost` |
+| `MYSQL_PORT` | MySQL port | `3306` |
+| `MYSQL_USER` | MySQL username | `root` |
+| `MYSQL_PASSWORD` | MySQL password | `<YOUR_MYSQL_PASSWORD>` |
+| `MYSQL_DATABASE` | MySQL database name | `vakil_lead_flow` |
 | `VAPID_PUBLIC_KEY` | Public key for browser Web Push | `<YOUR_VAPID_PUBLIC_KEY>` |
 | `VAPID_PRIVATE_KEY` | Private key for browser Web Push | `<Secret>` |
 

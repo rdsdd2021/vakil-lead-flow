@@ -1,27 +1,20 @@
 /**
- * AWS Lambda Handler: POST /webhooks/smartflo/hangup
+ * MySQL-Backed Webhook Handler: POST /webhooks/smartflo/hangup
  * 
  * Called automatically by Tata Tele Smartflo when a call ends (Hangup event).
  * 
- * Webhook Payload from Smartflo includes:
- * - call_id: Unique call identifier
- * - custom_identifier: { lead_id, agent_id }
- * - duration: Total connected seconds
- * - recording_url: Downloadable audio file URL
- * - call_status: 'answered' | 'missed' | 'busy'
- * 
  * Actions:
- * 1. Attaches the recording_url and call log to the lead's communication_notes.
+ * 1. Attaches the recording_url and call log to the lead's communication_notes in MySQL.
  * 2. Appends an entry to the lead's activity_logs so it appears on the Activity Timeline.
  */
 
-const { Client } = require('pg');
+const { query } = require('../db/mysql');
 
 exports.handler = async (event) => {
   console.log('Received Tata Smartflo Hangup Webhook:', event.body);
 
   try {
-    const payload = JSON.parse(event.body || '{}');
+    const payload = typeof event.body === 'string' ? JSON.parse(event.body || '{}') : (event.body || {});
     const {
       call_id,
       custom_identifier = {},
@@ -42,23 +35,15 @@ exports.handler = async (event) => {
     const durationSecs = duration % 60;
     const durationFormatted = `${durationMins}m ${durationSecs}s`;
 
-    // Connect to PostgreSQL DB
-    const client = new Client({
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false },
-    });
-    await client.connect();
-
-    // Fetch existing communication_notes
-    const res = await client.query('SELECT communication_notes FROM leads WHERE id = $1', [lead_id]);
-    if (res.rows.length === 0) {
-      await client.end();
+    // Fetch existing communication_notes from MySQL
+    const rows = await query('SELECT communication_notes FROM leads WHERE id = ?', [lead_id]);
+    if (!rows || rows.length === 0) {
       return { statusCode: 404, body: 'Lead not found' };
     }
 
     let notes = { notes: [], call_logs: [], meetings: [], activity_logs: [] };
     try {
-      const raw = res.rows[0].communication_notes;
+      const raw = rows[0].communication_notes;
       if (raw) notes = typeof raw === 'string' ? JSON.parse(raw) : raw;
     } catch (e) {
       console.error('Error parsing notes:', e);
@@ -89,18 +74,35 @@ exports.handler = async (event) => {
     notes.call_logs = [callLogEntry, ...(notes.call_logs || [])];
     notes.activity_logs = [activityLogEntry, ...(notes.activity_logs || [])];
 
-    // Save back to DB
-    await client.query(
-      'UPDATE leads SET communication_notes = $1, updated_at = NOW() WHERE id = $2',
+    // Save back to MySQL
+    await query(
+      'UPDATE leads SET communication_notes = ?, updated_at = NOW() WHERE id = ?',
       [JSON.stringify(notes), lead_id]
     );
 
-    await client.end();
+    // Also insert into activity_logs table for relational querying
+    try {
+      await query(
+        `INSERT INTO activity_logs (id, entity_type, entity_id, action, details, call_duration, call_status, recording_url, created_by)
+         VALUES (?, 'lead', ?, 'Call Made', ?, ?, ?, ?, ?)`,
+        [
+          activityLogEntry.id,
+          lead_id,
+          activityLogEntry.details,
+          durationFormatted,
+          call_status,
+          recording_url || null,
+          activityLogEntry.created_by,
+        ]
+      );
+    } catch (logErr) {
+      console.warn('Could not insert separate activity_logs row:', logErr.message);
+    }
 
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ success: true, message: 'Call recording synced to CRM lead history' }),
+      body: JSON.stringify({ success: true, message: 'Call recording synced to MySQL lead history' }),
     };
   } catch (err) {
     console.error('Failed to process Smartflo Hangup webhook:', err);

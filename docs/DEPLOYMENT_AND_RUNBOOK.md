@@ -49,15 +49,36 @@ The [vercel.json](file:///C:/Users/Ramanuj%20Dey%20Sarkar/Downloads/vakil-lead-f
 ### 2.1 Prerequisites
 * **Node.js**: v20.x or higher
 * **Package Manager**: `npm` or `pnpm` (v9+)
+* **MySQL / MariaDB**: v5.7+ / v8.0+ / MariaDB 10.3+
 * **Git**: Installed and configured
 
 ### 2.2 Step-by-Step Installation
 1. Clone the repository and navigate into the root directory:
    ```bash
-   git clone <REPOSITORY_URL>
-   cd vakil-lead-flow-main
+   git clone https://github.com/rdsdd2021/vakil-lead-flow.git
+   cd vakil-lead-flow
    ```
 2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Configure environment variables:
+   ```bash
+   cp .env.example .env
+   # Edit .env with your MySQL credentials (MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE)
+   ```
+4. Initialize the MySQL database schema and seed default staff accounts:
+   ```bash
+   npm run db:init
+   ```
+5. Start the backend & dialplan server:
+   ```bash
+   npm run server
+   ```
+6. In a separate terminal, start the Vite development server:
+   ```bash
+   npm run dev
+   ```
    ```bash
    npm install
    # or
@@ -171,6 +192,21 @@ localStorage.removeItem('vakil_leads');
 localStorage.removeItem('vakil_tickets');
 localStorage.removeItem('vakil_auth_user');
 window.location.href = '/login';
+```
+
+### 4.3 MySQL Database Backup & Restore (Production)
+
+#### A. Generating a MySQL Dump
+To create a complete snapshot of all leads, tickets, users, and telephony logs:
+```bash
+mysqldump -h localhost -u root -p vakil_lead_flow > vakil_crm_backup_$(date +%F).sql
+```
+
+#### B. Restoring from a MySQL Dump
+To restore a database snapshot into your MySQL instance:
+```bash
+mysql -h localhost -u root -p -e "CREATE DATABASE IF NOT EXISTS vakil_lead_flow;"
+mysql -h localhost -u root -p vakil_lead_flow < vakil_crm_backup_2026-11-22.sql
 ```
 
 ---

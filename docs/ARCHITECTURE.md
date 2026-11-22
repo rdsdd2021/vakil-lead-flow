@@ -116,7 +116,82 @@ useEffect(() => {
 
 ---
 
-## 3. Role-Based Access Control (RBAC) Matrix
+## 3. MySQL Relational Database Architecture
+
+The platform includes a dedicated **MySQL / MariaDB** database tier paired with the backend server (`backend/smartflo/server.js`) to provide persistent relational storage, ACID compliance, and multi-user synchronization.
+
+### 3.1 Entity-Relationship (ER) Architecture
+The MySQL schema ([database/schema.sql](file:///C:/Users/Ramanuj%20Dey%20Sarkar/Downloads/vakil-lead-flow-main/vakil-lead-flow-main/database/schema.sql)) consists of 6 core tables:
+
+```mermaid
+erDiagram
+    users ||--o{ leads : "assigned to"
+    users ||--o{ tickets : "manages"
+    users ||--o{ follow_ups : "scheduled for"
+    users ||--o{ push_subscriptions : "registers"
+    leads ||--o{ activity_logs : "tracks"
+    tickets ||--o{ activity_logs : "records"
+
+    users {
+        varchar(64) id PK
+        varchar(255) name
+        varchar(255) email UK
+        varchar(50) phone
+        enum role
+        timestamp created_at
+    }
+
+    leads {
+        varchar(64) id PK
+        varchar(64) custom_id
+        varchar(255) name
+        varchar(50) whatsapp_number
+        varchar(50) phone
+        varchar(100) service
+        varchar(50) status
+        decimal advance_amount
+        varchar(64) assigned_lawyer_id FK
+        json communication_notes
+        timestamp created_at
+    }
+
+    tickets {
+        varchar(64) ticket_id PK
+        varchar(64) client_id
+        varchar(255) client_name
+        varchar(64) lawyer_id FK
+        varchar(100) service_type
+        varchar(50) status
+        decimal amount
+        decimal advance_paid
+        json communication_notes
+        timestamp created_at
+    }
+
+    activity_logs {
+        varchar(64) id PK
+        varchar(50) entity_type
+        varchar(64) entity_id FK
+        varchar(100) action
+        text details
+        varchar(50) call_duration
+        varchar(50) call_status
+        varchar(1024) recording_url
+        varchar(255) created_by
+        timestamp created_at
+    }
+```
+
+### 3.2 Dual-Tier Hybrid State Synchronization
+To maintain lightning-fast offline UI operations without sacrificing centralized database persistence:
+1. **Frontend Optimistic Local Writes**: Actions on the frontend immediately update local React state and `localStorage`.
+2. **Asynchronous MySQL REST Synchronization**: The frontend background-syncs mutations to `http://localhost:3001/api/leads` and `/api/tickets`.
+3. **Graceful Offline Tolerance**: If the MySQL server is unreachable, the application continues to run in offline local-storage mode without crashing.
+4. **Backend Telephony Integration**: Tata Smartflo webhooks (`/webhooks/smartflo/hangup` and `/webhooks/smartflo/missed`) write call durations, recording URLs, and missed alerts directly into MySQL.
+
+---
+
+## 4. Role-Based Access Control (RBAC) Matrix
 
 The application provides strict boundary separation between administrative staff, intake operators, and case lawyers:
 

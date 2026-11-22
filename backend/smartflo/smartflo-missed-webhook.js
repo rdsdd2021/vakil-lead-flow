@@ -1,53 +1,49 @@
 /**
- * AWS Lambda Handler: POST /webhooks/smartflo/missed
+ * MySQL-Backed Webhook Handler: POST /webhooks/smartflo/missed
  * 
  * Called by Tata Tele Smartflo when an inbound customer call to the agent goes unanswered or agent is busy.
  * 
  * Actions:
- * 1. Logs missed callback in the lead's Activity Timeline in PostgreSQL.
+ * 1. Logs missed callback in the lead's Activity Timeline in MySQL.
  * 2. Sends an instant Web Push notification to the agent's browser/PWA via VAPID.
  */
 
-const { Client } = require('pg');
-const webpush = require('web-push'); // Can be bundled with lambda layer or AWS SNS
+const { query } = require('../db/mysql');
+const webpush = require('web-push');
 
-// Use VAPID keys matching src/lib/pushNotifications.ts
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BM_REPLACE_WITH_YOUR_VAPID_PUBLIC_KEY_IN_PRODUCTION';
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY; // Stored securely in Lambda Env
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
 const VAPID_SUBJECT = 'mailto:support@vakiltech.com';
 
 if (VAPID_PRIVATE_KEY) {
-  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+  try {
+    webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+  } catch (e) {
+    console.warn('Failed to configure VAPID details:', e.message);
+  }
 }
 
 exports.handler = async (event) => {
   console.log('Received Tata Smartflo Missed Call / Agent Busy Webhook:', event.body);
 
   try {
-    const payload = JSON.parse(event.body || '{}');
+    const payload = typeof event.body === 'string' ? JSON.parse(event.body || '{}') : (event.body || {});
     const { caller_id, call_status = 'missed', agent_id, agent_extension } = payload;
 
     const callerNumber = (caller_id || '').replace(/^\+/, '').replace(/\s/g, '');
     const phoneSuffix = callerNumber.slice(-10);
 
-    const client = new Client({
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false },
-    });
-    await client.connect();
-
-    // Find lead
-    const res = await client.query(
-      'SELECT id, name, last_called_by, assigned_lawyer_id, communication_notes FROM leads WHERE whatsapp_number LIKE $1 LIMIT 1',
-      [`%${phoneSuffix}`]
+    // Find lead in MySQL by phone or whatsapp_number
+    const rows = await query(
+      'SELECT id, name, last_called_by, assigned_lawyer_id, communication_notes FROM leads WHERE whatsapp_number LIKE ? OR phone LIKE ? LIMIT 1',
+      [`%${phoneSuffix}`, `%${phoneSuffix}`]
     );
 
-    if (res.rows.length === 0) {
-      await client.end();
-      return { statusCode: 200, body: JSON.stringify({ message: 'No matching lead found' }) };
+    if (!rows || rows.length === 0) {
+      return { statusCode: 200, body: JSON.stringify({ message: 'No matching lead found in MySQL' }) };
     }
 
-    const lead = res.rows[0];
+    const lead = rows[0];
     const targetAgentId = lead.last_called_by || lead.assigned_lawyer_id || agent_id;
 
     // Log to communication_notes & activity_logs
@@ -71,15 +67,15 @@ exports.handler = async (event) => {
 
     notes.activity_logs = [missedLog, ...(notes.activity_logs || [])];
 
-    await client.query(
-      'UPDATE leads SET communication_notes = $1, updated_at = NOW() WHERE id = $2',
+    await query(
+      'UPDATE leads SET communication_notes = ?, updated_at = NOW() WHERE id = ?',
       [JSON.stringify(notes), lead.id]
     );
 
-    // Send Web Push notification if subscription exists
+    // Send Web Push notification if subscription exists in MySQL
     if (VAPID_PRIVATE_KEY && targetAgentId) {
-      const subRes = await client.query('SELECT subscription FROM push_subscriptions WHERE user_id = $1', [targetAgentId]);
-      if (subRes.rows.length > 0) {
+      const subRes = await query('SELECT subscription FROM push_subscriptions WHERE user_id = ?', [targetAgentId]);
+      if (subRes && subRes.length > 0) {
         const pushPayload = JSON.stringify({
           title: '⚠️ Missed Callback (Agent Busy)',
           body: `${lead.name} called back on Tata Smartflo line. Tap to return call.`,
@@ -87,22 +83,21 @@ exports.handler = async (event) => {
           tag: `missed-call-${lead.id}`,
         });
 
-        for (const row of subRes.rows) {
+        for (const row of subRes) {
           try {
-            await webpush.sendNotification(JSON.parse(row.subscription), pushPayload);
+            const subData = typeof row.subscription === 'string' ? JSON.parse(row.subscription) : row.subscription;
+            await webpush.sendNotification(subData, pushPayload);
           } catch (pushErr) {
-            console.error('Push send failed:', pushErr);
+            console.error('Push send failed:', pushErr.message);
           }
         }
       }
     }
 
-    await client.end();
-
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ success: true, message: 'Missed callback logged and agent notified.' }),
+      body: JSON.stringify({ success: true, message: 'Missed callback logged in MySQL and agent notified.' }),
     };
   } catch (error) {
     console.error('Error handling missed call webhook:', error);

@@ -184,7 +184,7 @@ export const SmartfloDialplanSettings: React.FC<{ triggerButton?: React.ReactNod
             </div>
 
             <p className="text-[11px] text-muted-foreground">
-              * In production, this directory is dynamically queried from your PostgreSQL `users` table or environment variables.
+              * In production, this directory is dynamically queried from your MySQL `users` table or environment variables.
             </p>
           </TabsContent>
 
