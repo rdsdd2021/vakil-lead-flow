@@ -51,6 +51,7 @@ Comprehensive technical, operational, and architectural documentation is availab
 | 🏛️ **[ARCHITECTURE.md](file:///C:/Users/Ramanuj%20Dey%20Sarkar/Downloads/vakil-lead-flow-main/vakil-lead-flow-main/docs/ARCHITECTURE.md)** | **System Architecture**: High-level design, `localStorage` schema, cross-tab reactive synchronization engine, and RBAC matrix. |
 | 📞 **[TELEPHONY_INTEGRATION_GUIDE.md](file:///C:/Users/Ramanuj%20Dey%20Sarkar/Downloads/vakil-lead-flow-main/vakil-lead-flow-main/docs/TELEPHONY_INTEGRATION_GUIDE.md)** | **Tata Smartflo Guide**: Pilot DID configuration, click-to-call bridging, dynamic `/api/dialplan` webhook spec, and `/api/recording` audio streaming proxy. |
 | 📖 **[USER_AND_ADMIN_MANUAL.md](file:///C:/Users/Ramanuj%20Dey%20Sarkar/Downloads/vakil-lead-flow-main/vakil-lead-flow-main/docs/USER_AND_ADMIN_MANUAL.md)** | **Operations Manual**: User guide for leads, tickets, follow-ups, click-to-call dialing, and changing profile calling numbers. |
+| 👥 **[USER_ROLES_AND_WORKFLOWS.md](file:///C:/Users/Ramanuj%20Dey%20Sarkar/Downloads/vakil-lead-flow-main/vakil-lead-flow-main/docs/USER_ROLES_AND_WORKFLOWS.md)** | **Roles & Userflows**: Granular permissions matrix (Super Admin, Front Desk, Lawyer, Client) and step-by-step userflows with sequence diagrams. |
 | 🚀 **[DEPLOYMENT_AND_RUNBOOK.md](file:///C:/Users/Ramanuj%20Dey%20Sarkar/Downloads/vakil-lead-flow-main/vakil-lead-flow-main/docs/DEPLOYMENT_AND_RUNBOOK.md)** | **Operations Runbook**: Vercel deployment, local dev setup, JSON data export/backup scripts, and disaster recovery. |
 
 ---
