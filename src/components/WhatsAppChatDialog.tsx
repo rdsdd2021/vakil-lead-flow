@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { 
   MessageCircle, Send, Check, CheckCheck, Clock, ExternalLink, 
-  RotateCw, Sparkles, Shield, User, Bot, FileText, Scale, Paperclip
+  RotateCw, Sparkles, Shield, User, Bot, FileText, Scale, Paperclip, AlertCircle
 } from 'lucide-react';
 import { useCRM } from '@/contexts/CRMContext';
 import { maskPhoneNumber } from '@/lib/smartflo';
@@ -13,6 +13,7 @@ import {
   WhatsAppMessage, 
   fetchWhatsAppMessages, 
   sendWhatsAppMessageApi, 
+  markWhatsAppMessageReadApi,
   QUICK_LEGAL_TEMPLATES 
 } from '@/lib/kapso';
 import { format } from 'date-fns';
@@ -47,12 +48,19 @@ export const WhatsAppChatDialog: React.FC<WhatsAppChatDialogProps> = ({
   const isSuperAdmin = currentRole === 'super_admin';
   const maskedPhone = maskPhoneNumber(rawPhoneNumber, isSuperAdmin);
 
-  // Load message history from MySQL / Kapso
+  // Load message history from MySQL / Kapso Cloud
   const loadHistory = async (quiet: boolean = false) => {
     if (!quiet) setIsLoading(true);
     try {
       const history = await fetchWhatsAppMessages(leadId, ticketId, rawPhoneNumber);
       setMessages(history);
+
+      // Automatically mark unread incoming messages as read in Meta
+      for (const msg of history) {
+        if (msg.direction === 'inbound' && msg.kapso_message_id) {
+          markWhatsAppMessageReadApi(msg.kapso_message_id);
+        }
+      }
     } catch (e) {
       console.warn('Failed to load chat history:', e);
     } finally {
@@ -153,6 +161,14 @@ export const WhatsAppChatDialog: React.FC<WhatsAppChatDialogProps> = ({
                   <span className="font-mono">{maskedPhone}</span>
                   {serviceTitle && <span>• {serviceTitle}</span>}
                 </DialogDescription>
+                {/* Receipts Legend Bar */}
+                <div className="flex items-center gap-1.5 text-[9px] text-emerald-100 bg-white/10 px-2 py-0.5 rounded-full w-fit mt-1 border border-white/15">
+                  <span className="flex items-center gap-0.5"><Check className="w-2.5 h-2.5" /> Sent</span>
+                  <span>•</span>
+                  <span className="flex items-center gap-0.5"><CheckCheck className="w-2.5 h-2.5 text-emerald-200" /> Delivered</span>
+                  <span>•</span>
+                  <span className="flex items-center gap-0.5 text-cyan-300 font-semibold"><CheckCheck className="w-2.5 h-2.5 text-cyan-300" /> Read</span>
+                </div>
               </div>
             </div>
 
@@ -236,13 +252,38 @@ export const WhatsAppChatDialog: React.FC<WhatsAppChatDialogProps> = ({
                           : 'Just now'}
                       </span>
                       {isOutbound && (
-                        <span>
+                        <span
+                          className="inline-flex items-center gap-1 ml-1 cursor-default"
+                          title={
+                            msg.status === 'read'
+                              ? `Read by client${msg.read_at ? ' at ' + format(new Date(msg.read_at), 'h:mm a') : ''}`
+                              : msg.status === 'delivered'
+                              ? `Delivered to device${msg.delivered_at ? ' at ' + format(new Date(msg.delivered_at), 'h:mm a') : ''}`
+                              : msg.status === 'failed'
+                              ? 'Message delivery failed'
+                              : 'Sent to WhatsApp servers'
+                          }
+                        >
                           {msg.status === 'read' ? (
-                            <CheckCheck className="w-3 h-3 text-cyan-300 inline" />
+                            <>
+                              <span className="text-[8px] font-semibold text-cyan-200">Read</span>
+                              <CheckCheck className="w-3.5 h-3.5 text-cyan-300 inline drop-shadow-sm" />
+                            </>
                           ) : msg.status === 'delivered' ? (
-                            <CheckCheck className="w-3 h-3 text-emerald-200 inline" />
+                            <>
+                              <span className="text-[8px] font-medium text-emerald-200">Delivered</span>
+                              <CheckCheck className="w-3.5 h-3.5 text-emerald-200 inline" />
+                            </>
+                          ) : msg.status === 'failed' ? (
+                            <>
+                              <span className="text-[8px] font-medium text-red-300">Failed</span>
+                              <AlertCircle className="w-3.5 h-3.5 text-red-300 inline" />
+                            </>
                           ) : (
-                            <Check className="w-3 h-3 text-emerald-200 inline" />
+                            <>
+                              <span className="text-[8px] text-emerald-200">Sent</span>
+                              <Check className="w-3.5 h-3.5 text-emerald-200 inline" />
+                            </>
                           )}
                         </span>
                       )}

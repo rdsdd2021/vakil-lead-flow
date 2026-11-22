@@ -143,14 +143,186 @@ async function sendWhatsAppMessage({ to, text, templateName, templateLanguage = 
 }
 
 /**
+ * Fetch WhatsApp conversation history directly from Kapso Platform Cloud API
+ */
+async function fetchKapsoConversationMessages(phone) {
+  if (!KAPSO_API_KEY || KAPSO_API_KEY === 'your_kapso_api_key_here') {
+    return [];
+  }
+  const cleanPhone = formatWhatsAppNumber(phone);
+  if (!cleanPhone) return [];
+
+  return new Promise((resolve) => {
+    const endpointUrl = new URL(`https://api.kapso.ai/platform/v1/whatsapp/messages`);
+    endpointUrl.searchParams.set('phone_number', cleanPhone);
+    endpointUrl.searchParams.set('limit', '50');
+
+    const req = https.request(
+      {
+        hostname: endpointUrl.hostname,
+        port: 443,
+        path: endpointUrl.pathname + endpointUrl.search,
+        method: 'GET',
+        headers: {
+          'X-API-Key': KAPSO_API_KEY,
+        },
+      },
+      (res) => {
+        let body = '';
+        res.on('data', chunk => body += chunk);
+        res.on('end', () => {
+          try {
+            const parsed = JSON.parse(body);
+            const rawList = parsed.data || [];
+            const mapped = rawList.map(item => {
+              const msgId = item.id;
+              const dir = item.kapso?.direction || (item.from ? 'inbound' : 'outbound');
+              const textContent = item.text?.body || item.kapso?.content || '';
+              const waStatus = item.kapso?.status || 'sent';
+              const createdIso = item.timestamp 
+                ? new Date(Number(item.timestamp) * 1000).toISOString() 
+                : new Date().toISOString();
+
+              const readTs = item.kapso?.statuses?.find(s => s.status === 'read')?.timestamp;
+              const deliveredTs = item.kapso?.statuses?.find(s => s.status === 'delivered')?.timestamp;
+
+              return {
+                id: msgId,
+                phone_number: item.kapso?.phone_number || item.from || item.to || cleanPhone,
+                direction: dir,
+                sender_name: item.kapso?.contact_name || (dir === 'inbound' ? 'Client' : 'Staff'),
+                message_type: item.type || 'text',
+                content: textContent,
+                status: waStatus,
+                kapso_message_id: msgId,
+                created_at: createdIso,
+                delivered_at: deliveredTs ? new Date(Number(deliveredTs) * 1000).toISOString() : null,
+                read_at: readTs ? new Date(Number(readTs) * 1000).toISOString() : null,
+              };
+            });
+
+            // Sort chronologically ascending
+            mapped.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+            resolve(mapped);
+          } catch (e) {
+            resolve([]);
+          }
+        });
+      }
+    );
+
+    req.on('error', (err) => {
+      console.warn('[Kapso AI] Platform messages fetch failed:', err.message);
+      resolve([]);
+    });
+
+    req.end();
+  });
+}
+
+/**
+ * Mark a WhatsApp message as read via Meta Cloud API / Kapso
+ */
+async function markWhatsAppMessageRead(messageId) {
+  if (!KAPSO_API_KEY || !messageId || messageId.startsWith('wamid.sim_')) {
+    return { success: true, simulated: true };
+  }
+
+  const endpointUrl = new URL(`${KAPSO_BASE_URL}/${KAPSO_PHONE_NUMBER_ID}/messages`);
+  const payload = JSON.stringify({
+    messaging_product: 'whatsapp',
+    status: 'read',
+    message_id: messageId,
+  });
+
+  return new Promise((resolve) => {
+    const req = https.request(
+      {
+        hostname: endpointUrl.hostname,
+        port: 443,
+        path: endpointUrl.pathname + endpointUrl.search,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': KAPSO_API_KEY,
+          'Content-Length': Buffer.byteLength(payload),
+        },
+      },
+      (res) => {
+        let body = '';
+        res.on('data', chunk => body += chunk);
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(body));
+          } catch (e) {
+            resolve({ success: res.statusCode === 200 });
+          }
+        });
+      }
+    );
+    req.on('error', () => resolve({ success: false }));
+    req.write(payload);
+    req.end();
+  });
+}
+
+/**
  * Parse Kapso / Meta Webhook Inbound Message Events
  */
-function parseKapsoWebhookPayload(payload) {
+function parseKapsoWebhookPayload(payload, headerEvent = '') {
   const events = [];
 
   try {
-    // 1. Kapso native direct payload: { event: 'whatsapp.message.received', data: { ... } }
-    if (payload.event === 'whatsapp.message.received' && payload.data) {
+    const eventName = headerEvent || payload.event || payload.type || '';
+
+    // 1. Kapso native structured format: { message: { ... }, conversation: { ... } }
+    if (payload.message) {
+      const msg = payload.message;
+      const conv = payload.conversation || {};
+      const msgId = msg.id || `msg_${Date.now()}`;
+      const phone = formatWhatsAppNumber(conv.phone_number || msg.from || msg.to);
+      const contactName = conv.contact_name || msg.kapso?.contact_name || 'Client';
+      const text = msg.text?.body || msg.kapso?.content || msg.content || '';
+      const timestamp = msg.timestamp ? new Date(Number(msg.timestamp) * 1000).toISOString() : new Date().toISOString();
+
+      if (eventName === 'whatsapp.message.received' || msg.kapso?.direction === 'inbound') {
+        events.push({
+          type: 'message',
+          from: phone,
+          name: contactName,
+          text: text,
+          messageId: msgId,
+          timestamp: timestamp,
+        });
+      } else if (
+        eventName.startsWith('whatsapp.message.') ||
+        msg.kapso?.status
+      ) {
+        const rawStatus = eventName.replace('whatsapp.message.', '') || msg.kapso?.status || 'sent';
+        events.push({
+          type: 'status_update',
+          messageId: msgId,
+          recipientId: phone,
+          status: rawStatus,
+          timestamp: timestamp,
+        });
+      }
+      return events;
+    }
+
+    // 2. Kapso message buffering / batch layout: { batch: true, data: [ { message, conversation } ] }
+    if (payload.batch && Array.isArray(payload.data)) {
+      for (const item of payload.data) {
+        if (item.message) {
+          const subEvents = parseKapsoWebhookPayload(item, eventName);
+          events.push(...subEvents);
+        }
+      }
+      return events;
+    }
+
+    // 3. Kapso legacy direct payload: { event: 'whatsapp.message.received', data: { ... } }
+    if (eventName === 'whatsapp.message.received' && payload.data) {
       const d = payload.data;
       events.push({
         type: 'message',
@@ -163,7 +335,7 @@ function parseKapsoWebhookPayload(payload) {
       return events;
     }
 
-    // 2. Standard Meta Cloud API forwarded webhook layout
+    // 4. Standard Meta Cloud API forwarded webhook layout
     if (payload.entry && Array.isArray(payload.entry)) {
       for (const entry of payload.entry) {
         if (!entry.changes) continue;
@@ -214,6 +386,8 @@ function parseKapsoWebhookPayload(payload) {
 
 module.exports = {
   sendWhatsAppMessage,
+  fetchKapsoConversationMessages,
+  markWhatsAppMessageRead,
   parseKapsoWebhookPayload,
   formatWhatsAppNumber,
   KAPSO_BASE_URL,

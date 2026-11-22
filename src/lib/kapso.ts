@@ -16,6 +16,8 @@ export interface WhatsAppMessage {
   status: 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
   kapso_message_id?: string | null;
   created_at: string;
+  delivered_at?: string | null;
+  read_at?: string | null;
 }
 
 export interface QuickLegalTemplate {
@@ -190,5 +192,21 @@ export async function sendWhatsAppMessageApi({
       error: 'Network error connecting to backend server: ' + (err.message || 'Check if server is running'),
       message: null as any,
     };
+  }
+}
+
+/**
+ * Mark a WhatsApp message as read so the client sees double blue checkmarks
+ */
+export async function markWhatsAppMessageReadApi(messageId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/whatsapp/mark-read`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messageId }),
+    });
+    return res.ok;
+  } catch (e) {
+    return false;
   }
 }

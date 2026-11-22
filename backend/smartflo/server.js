@@ -40,7 +40,13 @@ const { resolveDialplanRoute } = require('./smartflo-dialplan-webhook');
 const hangupWebhook = require('./smartflo-hangup-webhook');
 const missedWebhook = require('./smartflo-missed-webhook');
 const callInitiate = require('./smartflo-call-initiate');
-const { sendWhatsAppMessage, parseKapsoWebhookPayload, formatWhatsAppNumber } = require('../kapso/whatsapp');
+const { 
+  sendWhatsAppMessage, 
+  fetchKapsoConversationMessages, 
+  markWhatsAppMessageRead, 
+  parseKapsoWebhookPayload, 
+  formatWhatsAppNumber 
+} = require('../kapso/whatsapp');
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
@@ -474,8 +480,9 @@ const server = http.createServer(async (req, res) => {
     }
 
     if ((pathname === '/webhooks/whatsapp' || pathname === '/webhooks/kapso/whatsapp') && method === 'POST') {
+      const headerEvent = req.headers['x-webhook-event'] || '';
       const body = await parseJsonBody(req);
-      const events = parseKapsoWebhookPayload(body);
+      const events = parseKapsoWebhookPayload(body, headerEvent);
 
       for (const ev of events) {
         if (ev.type === 'message') {
@@ -515,7 +522,13 @@ const server = http.createServer(async (req, res) => {
             kapso_message_id: ev.messageId,
             created_at: ev.timestamp || new Date().toISOString(),
           };
-          inMemoryWhatsAppMessages.push(inboundMsg);
+
+          const existingIdx = inMemoryWhatsAppMessages.findIndex(m => m.id === msgId || (m.kapso_message_id && m.kapso_message_id === msgId));
+          if (existingIdx >= 0) {
+            inMemoryWhatsAppMessages[existingIdx] = inboundMsg;
+          } else {
+            inMemoryWhatsAppMessages.push(inboundMsg);
+          }
 
           try {
             await query(
@@ -547,6 +560,14 @@ const server = http.createServer(async (req, res) => {
             }
           }
         } else if (ev.type === 'status_update') {
+          // Update in-memory message status for real-time delivery and read receipts
+          const match = inMemoryWhatsAppMessages.find(m => m.id === ev.messageId || m.kapso_message_id === ev.messageId);
+          if (match) {
+            match.status = ev.status;
+            if (ev.status === 'delivered') match.delivered_at = ev.timestamp;
+            if (ev.status === 'read') match.read_at = ev.timestamp;
+          }
+
           try {
             await query('UPDATE whatsapp_messages SET status = ? WHERE kapso_message_id = ?', [
               ev.status,
@@ -560,7 +581,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     // -----------------------------------------------------------------
-    // 11. REST API: Kapso WhatsApp Chat (Send & Fetch History)
+    // 11. REST API: Kapso WhatsApp Chat (Send, Fetch & Mark Read)
     // -----------------------------------------------------------------
     if (pathname === '/api/whatsapp/messages' && method === 'GET') {
       const phone = parsedUrl.query.phone ? formatWhatsAppNumber(parsedUrl.query.phone) : '';
@@ -568,6 +589,27 @@ const server = http.createServer(async (req, res) => {
       const ticketId = parsedUrl.query.ticketId || '';
       const cleanLast10 = phone ? phone.slice(-10) : '';
 
+      // 1. Fetch live messages directly from Kapso Cloud Platform API
+      let cloudMsgs = [];
+      if (phone) {
+        try {
+          cloudMsgs = await fetchKapsoConversationMessages(phone);
+        } catch (cloudErr) {
+          console.warn('[WhatsApp] Could not fetch from Kapso Cloud API:', cloudErr.message);
+        }
+      }
+
+      // Merge Cloud messages into inMemory store
+      for (const cm of cloudMsgs) {
+        const idx = inMemoryWhatsAppMessages.findIndex(m => m.id === cm.id || (m.kapso_message_id && m.kapso_message_id === cm.id));
+        if (idx >= 0) {
+          inMemoryWhatsAppMessages[idx] = { ...inMemoryWhatsAppMessages[idx], ...cm };
+        } else {
+          inMemoryWhatsAppMessages.push({ ...cm, lead_id: leadId || null, ticket_id: ticketId || null });
+        }
+      }
+
+      // 2. Query MySQL if online
       try {
         let sql = 'SELECT * FROM whatsapp_messages WHERE 1=1';
         const params = [];
@@ -587,13 +629,18 @@ const server = http.createServer(async (req, res) => {
 
         const rows = await query(sql, params);
         if (rows && rows.length > 0) {
-          return sendJson(res, 200, rows);
+          // Merge with Cloud messages
+          const map = new Map();
+          for (const r of rows) map.set(r.id, r);
+          for (const m of cloudMsgs) map.set(m.id, { ...(map.get(m.id) || {}), ...m });
+          const combined = Array.from(map.values()).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+          return sendJson(res, 200, combined);
         }
       } catch (err) {
-        console.warn('[WhatsApp Messages] MySQL unavailable, serving from in-memory fallback store:', err.message);
+        // MySQL unavailable, fall through
       }
 
-      // In-memory fallback if MySQL query fails or returned 0 rows
+      // 3. Fallback to merged in-memory store
       const matched = inMemoryWhatsAppMessages.filter(m => {
         if (leadId && m.lead_id === leadId) return true;
         if (ticketId && m.ticket_id === ticketId) return true;
@@ -601,7 +648,27 @@ const server = http.createServer(async (req, res) => {
         return false;
       });
 
-      return sendJson(res, 200, matched);
+      // Deduplicate and sort chronologically
+      const map = new Map();
+      for (const m of matched) map.set(m.id, m);
+      for (const m of cloudMsgs) map.set(m.id, { ...(map.get(m.id) || {}), ...m });
+      const finalSorted = Array.from(map.values()).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+      return sendJson(res, 200, finalSorted);
+    }
+
+    if (pathname === '/api/whatsapp/mark-read' && method === 'POST') {
+      try {
+        const data = await parseJsonBody(req);
+        const { messageId } = data;
+        if (!messageId) {
+          return sendJson(res, 400, { error: 'messageId is required' });
+        }
+        const result = await markWhatsAppMessageRead(messageId);
+        return sendJson(res, 200, { success: true, result });
+      } catch (err) {
+        return sendJson(res, 500, { error: 'Failed to mark message read: ' + err.message });
+      }
     }
 
     if (pathname === '/api/whatsapp/send' && method === 'POST') {
