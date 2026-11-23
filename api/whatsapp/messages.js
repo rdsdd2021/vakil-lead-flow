@@ -37,7 +37,23 @@ export default async function handler(req, res) {
     }
 
     const json = await resp.json();
-    const rawList = json.data || [];
+    let rawList = json.data || [];
+
+    // Fallback if 12-digit returned empty, try 10-digit
+    if (rawList.length === 0 && cleanPhone.length === 12 && cleanPhone.startsWith('91')) {
+      try {
+        const altResp = await fetch(`https://api.kapso.ai/platform/v1/whatsapp/messages?phone_number=${cleanPhone.slice(2)}&limit=50`, {
+          method: 'GET',
+          headers: { 'X-API-Key': KAPSO_API_KEY },
+        });
+        if (altResp.ok) {
+          const altJson = await altResp.json();
+          if (altJson.data && altJson.data.length > 0) {
+            rawList = altJson.data;
+          }
+        }
+      } catch (e) {}
+    }
 
     const mapped = rawList.map(item => {
       const msgId = item.id;

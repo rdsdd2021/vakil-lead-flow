@@ -191,11 +191,52 @@ export const Inbox: React.FC = () => {
     return () => clearInterval(timer);
   }, [leads, tickets]);
 
+  // Sync searchParams with selectedPhone if URL changes
+  useEffect(() => {
+    const phoneParam = searchParams.get('phone');
+    if (phoneParam) {
+      const clean = cleanPhoneDigits(phoneParam);
+      if (clean && cleanPhoneDigits(selectedPhone || '').slice(-10) !== clean.slice(-10)) {
+        setSelectedPhone(phoneParam);
+      }
+    }
+  }, [searchParams]);
+
   // Active selected conversation
   const activeConversation = useMemo(() => {
     if (!selectedPhone) return null;
-    return conversations.find(c => cleanPhoneDigits(c.phone_number) === cleanPhoneDigits(selectedPhone)) || null;
-  }, [conversations, selectedPhone]);
+    const cleanSel = cleanPhoneDigits(selectedPhone);
+    const last10 = cleanSel.slice(-10);
+
+    const match = conversations.find(c => cleanPhoneDigits(c.phone_number).slice(-10) === last10);
+    if (match) return match;
+
+    // Fallback: If navigating directly to a phone number (e.g. /inbox?phone=918250622813)
+    // create an immediate conversation container so messages load and chat renders immediately
+    const { matchedLead, matchedTicket } = findLinkedEntities(selectedPhone);
+    const assignedId = matchedTicket?.lawyer_id || matchedLead?.assigned_lawyer_id || null;
+    const assignedUser = users.find(u => u.id === assignedId);
+
+    return {
+      id: `conv_direct_${last10}`,
+      phone_number: selectedPhone,
+      contact_name: matchedLead?.name || 'Client',
+      last_message: '',
+      last_message_timestamp: new Date().toISOString(),
+      last_message_type: 'text',
+      messages_count: 0,
+      status: 'active',
+      lead_id: matchedLead?.id,
+      ticket_id: matchedTicket?.ticket_id,
+      service_title: matchedTicket?.service_type 
+        ? (SERVICE_LABELS[matchedTicket.service_type] || matchedTicket.service_type)
+        : matchedLead?.service 
+          ? (SERVICE_LABELS[matchedLead.service] || matchedLead.service)
+          : undefined,
+      assigned_agent_id: assignedId,
+      assigned_agent_name: assignedUser?.name || matchedTicket?.lawyer_name || null,
+    } as WhatsAppConversation;
+  }, [conversations, selectedPhone, leads, tickets, users]);
 
   // Load message history for selected conversation
   const loadActiveChatMessages = async (quiet = false) => {

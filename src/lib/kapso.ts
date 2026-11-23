@@ -147,7 +147,22 @@ export const QUICK_LEGAL_TEMPLATES: QuickLegalTemplate[] = [
   },
 ];
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+const getApiBaseUrl = () => {
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    // In production, vercel deployments, or when not on local node server, always use relative path ''
+    if (host !== 'localhost' && host !== '127.0.0.1') {
+      return '';
+    }
+  }
+  const envUrl = import.meta.env.VITE_API_URL || '';
+  if (envUrl.includes('localhost') && typeof window !== 'undefined' && window.location.port === '8080') {
+    return '';
+  }
+  return envUrl;
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 /**
  * Fetch WhatsApp conversation history from MySQL backend
@@ -164,7 +179,7 @@ export async function fetchWhatsAppMessages(
     if (phone) params.append('phone', phone);
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 3000);
+    const timer = setTimeout(() => controller.abort(), 15000);
 
     const res = await fetch(`${API_BASE_URL}/api/whatsapp/messages?${params.toString()}`, {
       signal: controller.signal,
@@ -382,7 +397,7 @@ export async function markWhatsAppMessageReadApi(messageId: string): Promise<boo
 export async function fetchWhatsAppConversations(): Promise<WhatsAppConversation[]> {
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 4000);
+    const timer = setTimeout(() => controller.abort(), 15000);
 
     const res = await fetch(`${API_BASE_URL}/api/whatsapp/conversations`, {
       signal: controller.signal,

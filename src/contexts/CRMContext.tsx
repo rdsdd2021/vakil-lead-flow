@@ -44,7 +44,21 @@ interface CRMContextType {
 import { mockLeads, mockTickets, mockUsers } from '@/data/mockData';
 import { AGENT_PHONE_DIRECTORY } from '@/lib/smartflo';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+const getApiBaseUrl = () => {
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    if (host !== 'localhost' && host !== '127.0.0.1') {
+      return '';
+    }
+  }
+  const envUrl = import.meta.env.VITE_API_URL || '';
+  if (envUrl.includes('localhost') && typeof window !== 'undefined' && window.location.port === '8080') {
+    return '';
+  }
+  return envUrl;
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 const CRMContext = createContext<CRMContextType | undefined>(undefined);
 
@@ -159,7 +173,7 @@ export const CRMProvider = ({ children }: { children: ReactNode }) => {
     // 1. Attempt MySQL REST API
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 2000);
+      const timer = setTimeout(() => controller.abort(), 10000);
       const res = await fetch(`${API_BASE_URL}/api/leads`, { signal: controller.signal }).catch(() => null);
       clearTimeout(timer);
 
@@ -200,7 +214,7 @@ export const CRMProvider = ({ children }: { children: ReactNode }) => {
     // 1. Attempt MySQL REST API
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 2000);
+      const timer = setTimeout(() => controller.abort(), 10000);
       const res = await fetch(`${API_BASE_URL}/api/tickets`, { signal: controller.signal }).catch(() => null);
       clearTimeout(timer);
 
@@ -241,7 +255,7 @@ export const CRMProvider = ({ children }: { children: ReactNode }) => {
     // 1. Attempt MySQL REST API
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 2000);
+      const timer = setTimeout(() => controller.abort(), 10000);
       const res = await fetch(`${API_BASE_URL}/api/users`, { signal: controller.signal }).catch(() => null);
       clearTimeout(timer);
 
