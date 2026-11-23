@@ -9,6 +9,9 @@ import {
   markWhatsAppMessageReadApi,
   QUICK_LEGAL_TEMPLATES 
 } from '@/lib/kapso';
+import { WhatsAppMediaBubble } from '@/components/WhatsAppMediaBubble';
+import { WhatsAppTemplateModal } from '@/components/WhatsAppTemplateModal';
+import { WhatsAppMediaSendModal } from '@/components/WhatsAppMediaSendModal';
 import { maskPhoneNumber } from '@/lib/smartflo';
 import { SmartfloCallDialog } from '@/components/SmartfloCallDialog';
 import { SERVICE_LABELS, CRMUser, Lead, Ticket } from '@/types/crm';
@@ -47,6 +50,8 @@ export const Inbox: React.FC = () => {
   const [isSending, setIsSending] = useState(false);
   const [showCallDialog, setShowCallDialog] = useState(false);
   const [showTemplatesDropdown, setShowTemplatesDropdown] = useState(false);
+  const [showPreApprovedModal, setShowPreApprovedModal] = useState(false);
+  const [showMediaSendModal, setShowMediaSendModal] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isSuperAdmin = currentRole === 'super_admin';
@@ -730,8 +735,11 @@ export const Inbox: React.FC = () => {
                           )}
                         </div>
 
+                        {/* Media Attachment Render (Image, PDF, Audio, Video) */}
+                        <WhatsAppMediaBubble message={msg} isOutbound={isOutbound} />
+
                         {/* Content */}
-                        <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                        {msg.content && <p className="whitespace-pre-wrap break-words">{msg.content}</p>}
 
                         {/* Message Footer: Timestamp & Read Status */}
                         <div className={`flex items-center justify-end gap-1 mt-1 text-[9px] ${
@@ -810,19 +818,45 @@ export const Inbox: React.FC = () => {
 
             {/* WhatsApp Web Message Composer (Footer) */}
             <div className="p-3 border-t border-border bg-card/95 backdrop-blur-md flex items-center gap-2 shrink-0">
-              {/* Quick Legal Templates Button */}
+              {/* Media Attachment Button (Images, Documents, Audio, Video) */}
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                onClick={() => setShowMediaSendModal(true)}
+                className="h-10 w-10 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted shrink-0"
+                title="Send Media (Photo, Document/PDF, Voice Note, Video)"
+              >
+                <Paperclip className="w-4 h-4" />
+              </Button>
+
+              {/* Pre-Approved Meta WhatsApp Template Button */}
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
+                onClick={() => setShowPreApprovedModal(true)}
+                className="h-10 px-2.5 rounded-xl text-xs gap-1.5 shrink-0 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20 font-semibold"
+                title="Send Official Pre-Approved Meta Template"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Meta Template</span>
+                <span className="sm:hidden">Template</span>
+              </Button>
+
+              {/* Quick Legal Replies Dropdown Toggle */}
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
                 onClick={() => setShowTemplatesDropdown(prev => !prev)}
                 className={`h-10 px-2.5 rounded-xl text-xs gap-1.5 shrink-0 ${
-                  showTemplatesDropdown ? 'bg-emerald-500/20 text-emerald-600 border-emerald-500' : 'text-muted-foreground'
+                  showTemplatesDropdown ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'
                 }`}
-                title="Legal Quick Reply Templates"
+                title="Quick Legal Phrases"
               >
-                <Sparkles className="w-4 h-4 text-emerald-500" />
-                <span className="hidden sm:inline">Templates</span>
+                <FileText className="w-3.5 h-3.5" />
+                <span className="hidden md:inline">Quick Replies</span>
               </Button>
 
               {/* Message Input Box */}
@@ -903,6 +937,43 @@ export const Inbox: React.FC = () => {
           leadName={activeConversation.contact_name}
           rawPhoneNumber={activeConversation.phone_number}
           serviceName={activeConversation.service_title}
+        />
+      )}
+
+      {/* Official Pre-Approved Meta WhatsApp Template Modal */}
+      {activeConversation && showPreApprovedModal && (
+        <WhatsAppTemplateModal
+          open={showPreApprovedModal}
+          onOpenChange={setShowPreApprovedModal}
+          recipientPhone={activeConversation.phone_number}
+          clientName={activeConversation.contact_name}
+          serviceTitle={activeConversation.service_title}
+          leadId={activeConversation.lead_id}
+          ticketId={activeConversation.ticket_id}
+          senderId={currentUser.id}
+          senderName={currentUser.name}
+          onTemplateSent={(newMsg) => {
+            setMessages(prev => [...prev, newMsg]);
+            loadConversations(true);
+          }}
+        />
+      )}
+
+      {/* WhatsApp Media & Documents Send Modal */}
+      {activeConversation && showMediaSendModal && (
+        <WhatsAppMediaSendModal
+          open={showMediaSendModal}
+          onOpenChange={setShowMediaSendModal}
+          recipientPhone={activeConversation.phone_number}
+          clientName={activeConversation.contact_name}
+          leadId={activeConversation.lead_id}
+          ticketId={activeConversation.ticket_id}
+          senderId={currentUser.id}
+          senderName={currentUser.name}
+          onMediaSent={(newMsg) => {
+            setMessages(prev => [...prev, newMsg]);
+            loadConversations(true);
+          }}
         />
       )}
 

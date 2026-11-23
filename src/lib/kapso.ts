@@ -13,12 +13,72 @@ export interface WhatsAppMessage {
   sender_name?: string | null;
   message_type?: string;
   content: string;
+  media_url?: string | null;
+  media_filename?: string | null;
   status: 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
   kapso_message_id?: string | null;
   created_at: string;
   delivered_at?: string | null;
   read_at?: string | null;
 }
+
+export interface PreApprovedTemplate {
+  name: string;
+  title: string;
+  language: string;
+  category: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION';
+  description: string;
+  preview: string;
+  variables: string[]; // e.g. ['Client Name', 'Case Title']
+}
+
+export const PRE_APPROVED_TEMPLATES: PreApprovedTemplate[] = [
+  {
+    name: 'hello_world',
+    title: 'Meta Official Hello World (Universal Test)',
+    language: 'en_US',
+    category: 'UTILITY',
+    description: 'Pre-approved default Meta template that immediately works outside the 24h window.',
+    preview: 'Hello World',
+    variables: [],
+  },
+  {
+    name: 'vakil_consultation_welcome',
+    title: 'Advocate Consultation Intake',
+    language: 'en_US',
+    category: 'UTILITY',
+    description: 'Welcome template acknowledging enquiry and assigning an advocate.',
+    preview: 'Hello {{1}}, thank you for reaching out to Vakiltech regarding {{2}}. An advocate has been assigned to your legal file.',
+    variables: ['Client Name', 'Service Name'],
+  },
+  {
+    name: 'vakil_document_request',
+    title: 'Document Checklist Submission',
+    language: 'en_US',
+    category: 'UTILITY',
+    description: 'Requests digital KYC, ID proof, and relevant agreements.',
+    preview: 'Dear {{1}}, to proceed with drafting documentation for {{2}}, kindly reply here with relevant agreements, identity proof, and prior notices.',
+    variables: ['Client Name', 'Matter Title'],
+  },
+  {
+    name: 'vakil_hearing_update',
+    title: 'Hearing Date & Proceedings Notice',
+    language: 'en_US',
+    category: 'UTILITY',
+    description: 'Notifies client of upcoming court hearing or tribunal proceeding.',
+    preview: 'Respected {{1}}, your matter {{2}} has been listed for hearing. Our legal team will attend and update you on the order passed.',
+    variables: ['Client Name', 'Court / Matter Title'],
+  },
+  {
+    name: 'vakil_fee_receipt',
+    title: 'Fee Payment & Retainer Acknowledgment',
+    language: 'en_US',
+    category: 'UTILITY',
+    description: 'Formal confirmation of legal advance / retainer payment.',
+    preview: 'Dear {{1}}, we have acknowledged receipt of your advance fee for {{2}}. Work on your legal notice / draft has commenced.',
+    variables: ['Client Name', 'Legal Service'],
+  },
+];
 
 export interface WhatsAppConversation {
   id: string;
@@ -171,6 +231,13 @@ export async function sendWhatsAppMessageApi({
   to,
   text,
   templateName,
+  templateLanguage = 'en_US',
+  templateComponents,
+  templateParameters,
+  mediaType,
+  mediaUrl,
+  filename,
+  caption,
   senderId,
   senderName,
 }: {
@@ -179,6 +246,13 @@ export async function sendWhatsAppMessageApi({
   to: string;
   text?: string;
   templateName?: string;
+  templateLanguage?: string;
+  templateComponents?: any[];
+  templateParameters?: any[];
+  mediaType?: 'image' | 'document' | 'audio' | 'video';
+  mediaUrl?: string;
+  filename?: string;
+  caption?: string;
   senderId?: string;
   senderName?: string;
 }): Promise<{ success: boolean; message: WhatsAppMessage; simulated?: boolean; error?: string }> {
@@ -192,6 +266,13 @@ export async function sendWhatsAppMessageApi({
         to,
         text,
         templateName,
+        templateLanguage,
+        templateComponents,
+        templateParameters,
+        mediaType,
+        mediaUrl,
+        filename,
+        caption,
         senderId,
         senderName,
       }),
@@ -229,6 +310,53 @@ export async function sendWhatsAppMessageApi({
       error: 'Network error connecting to backend server: ' + (err.message || 'Check if server is running'),
       message: null as any,
     };
+  }
+}
+
+/**
+ * Upload local media file to serverless endpoint to get a public URL for Meta Cloud API
+ */
+export async function uploadWhatsAppMediaApi(file: File): Promise<{
+  success: boolean;
+  media_url?: string;
+  filename?: string;
+  content_type?: string;
+  error?: string;
+}> {
+  try {
+    const reader = new FileReader();
+    const dataUrlPromise = new Promise<string>((resolve, reject) => {
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    const dataUrl = await dataUrlPromise;
+
+    const res = await fetch(`${API_BASE_URL}/api/whatsapp/upload`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dataUrl,
+        filename: file.name,
+        contentType: file.type || 'application/octet-stream',
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        success: true,
+        media_url: data.media_url,
+        filename: data.filename || file.name,
+        content_type: data.content_type || file.type,
+      };
+    } else {
+      const err = await res.json().catch(() => ({}));
+      return { success: false, error: err.error || 'Upload failed' };
+    }
+  } catch (err: any) {
+    return { success: false, error: err.message || 'File read error' };
   }
 }
 

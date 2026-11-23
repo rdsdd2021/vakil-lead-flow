@@ -42,7 +42,12 @@ export default async function handler(req, res) {
     const mapped = rawList.map(item => {
       const msgId = item.id;
       const dir = item.kapso?.direction || (item.from ? 'inbound' : 'outbound');
-      const textContent = item.text?.body || item.kapso?.content || '';
+      const mediaUrl = item.kapso?.media_url || item.kapso?.media_data?.url || 
+                       item.image?.link || item.document?.link || item.audio?.link || item.video?.link || null;
+      const mediaFilename = item.kapso?.media_data?.filename || item.document?.filename || null;
+      const caption = item.image?.caption || item.document?.caption || item.video?.caption || item.kapso?.message_type_data?.caption || '';
+      const textContent = item.text?.body || caption || item.kapso?.content || '';
+      const rawType = item.type || (mediaUrl ? (item.document ? 'document' : item.audio ? 'audio' : item.video ? 'video' : 'image') : 'text');
       const waStatus = item.kapso?.status || 'sent';
       const createdIso = item.timestamp
         ? new Date(Number(item.timestamp) * 1000).toISOString()
@@ -56,8 +61,10 @@ export default async function handler(req, res) {
         phone_number: item.kapso?.phone_number || item.from || item.to || cleanPhone,
         direction: dir,
         sender_name: dir === 'inbound' ? (item.kapso?.contact_name || 'Client') : 'Staff',
-        message_type: item.type || 'text',
+        message_type: rawType,
         content: textContent,
+        media_url: mediaUrl,
+        media_filename: mediaFilename,
         status: waStatus,
         kapso_message_id: msgId,
         created_at: createdIso,

@@ -25,17 +25,46 @@ export default async function handler(req, res) {
 
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-    const { to, text, templateName, templateLanguage = 'en_US', senderId, senderName, leadId, ticketId } = body;
+    const { 
+      to, 
+      text, 
+      templateName, 
+      templateLanguage = 'en_US', 
+      templateComponents, 
+      templateParameters,
+      type,
+      mediaType,
+      mediaUrl,
+      filename,
+      caption,
+      senderId, 
+      senderName, 
+      leadId, 
+      ticketId 
+    } = body;
 
     const cleanTo = formatWhatsAppNumber(to);
-    if (!cleanTo || (!text && !templateName)) {
-      return res.status(400).json({ error: 'Valid phone number and text or template are required' });
+    const resolvedMediaType = mediaType || (['image', 'document', 'audio', 'video'].includes(type) ? type : null);
+
+    if (!cleanTo || (!text && !templateName && !mediaUrl)) {
+      return res.status(400).json({ error: 'Valid phone number and text, template, or media are required' });
     }
 
     const normalizedLang = templateLanguage === 'en' ? 'en_US' : templateLanguage;
 
     let payload;
     if (templateName) {
+      // 1. Meta Pre-Approved WhatsApp Template
+      let components = templateComponents;
+      if (!components && Array.isArray(templateParameters) && templateParameters.length > 0) {
+        components = [
+          {
+            type: 'body',
+            parameters: templateParameters.map(p => typeof p === 'object' ? p : { type: 'text', text: String(p) }),
+          },
+        ];
+      }
+
       payload = {
         messaging_product: 'whatsapp',
         recipient_type: 'individual',
@@ -44,9 +73,58 @@ export default async function handler(req, res) {
         template: {
           name: templateName,
           language: { code: normalizedLang },
+          ...(components && components.length > 0 ? { components } : {}),
         },
       };
+    } else if (resolvedMediaType && mediaUrl) {
+      // 2. WhatsApp Media (Image, Document, Audio, Video)
+      if (resolvedMediaType === 'image') {
+        payload = {
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to: cleanTo,
+          type: 'image',
+          image: {
+            link: mediaUrl,
+            caption: String(caption || text || '').trim(),
+          },
+        };
+      } else if (resolvedMediaType === 'document') {
+        payload = {
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to: cleanTo,
+          type: 'document',
+          document: {
+            link: mediaUrl,
+            filename: filename || 'Legal_Document.pdf',
+            caption: String(caption || text || '').trim(),
+          },
+        };
+      } else if (resolvedMediaType === 'audio') {
+        payload = {
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to: cleanTo,
+          type: 'audio',
+          audio: {
+            link: mediaUrl,
+          },
+        };
+      } else if (resolvedMediaType === 'video') {
+        payload = {
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to: cleanTo,
+          type: 'video',
+          video: {
+            link: mediaUrl,
+            caption: String(caption || text || '').trim(),
+          },
+        };
+      }
     } else {
+      // 3. WhatsApp Plain Text
       payload = {
         messaging_product: 'whatsapp',
         recipient_type: 'individual',
@@ -93,8 +171,10 @@ export default async function handler(req, res) {
       direction: 'outbound',
       sender_id: senderId || 'staff',
       sender_name: senderName || 'Vakil Staff',
-      message_type: templateName ? 'template' : 'text',
-      content: String(text || `Template: ${templateName}`).trim(),
+      message_type: templateName ? 'template' : (resolvedMediaType || 'text'),
+      content: String(caption || text || (templateName ? `Template: ${templateName}` : filename || `[${resolvedMediaType || 'media'}]`)).trim(),
+      media_url: mediaUrl || null,
+      media_filename: filename || null,
       status: 'sent',
       kapso_message_id: kapsoMsgId,
       created_at: new Date().toISOString(),

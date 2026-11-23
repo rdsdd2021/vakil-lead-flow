@@ -7,6 +7,9 @@ import {
   MessageCircle, Send, Check, CheckCheck, Clock, ExternalLink, 
   RotateCw, Sparkles, Shield, User, Bot, FileText, Scale, Paperclip, AlertCircle
 } from 'lucide-react';
+import { WhatsAppMediaBubble } from '@/components/WhatsAppMediaBubble';
+import { WhatsAppTemplateModal } from '@/components/WhatsAppTemplateModal';
+import { WhatsAppMediaSendModal } from '@/components/WhatsAppMediaSendModal';
 import { useCRM } from '@/contexts/CRMContext';
 import { maskPhoneNumber } from '@/lib/smartflo';
 import { 
@@ -45,6 +48,8 @@ export const WhatsAppChatDialog: React.FC<WhatsAppChatDialogProps> = ({
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [showPreApprovedModal, setShowPreApprovedModal] = useState(false);
+  const [showMediaSendModal, setShowMediaSendModal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const isSuperAdmin = currentRole === 'super_admin';
@@ -277,7 +282,10 @@ export const WhatsAppChatDialog: React.FC<WhatsAppChatDialogProps> = ({
                       </p>
                     )}
 
-                    <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                    {/* Media Attachment Render (Image, PDF, Audio, Video) */}
+                    <WhatsAppMediaBubble message={msg} isOutbound={isOutbound} />
+
+                    {msg.content && <p className="whitespace-pre-wrap break-words">{msg.content}</p>}
 
                     <div
                       className={`flex items-center gap-1 mt-1 text-[9px] ${
@@ -357,8 +365,33 @@ export const WhatsAppChatDialog: React.FC<WhatsAppChatDialogProps> = ({
               e.preventDefault();
               handleSendMessage();
             }}
-            className="flex items-center gap-2"
+            className="flex items-center gap-1.5"
           >
+            {/* Attach Media Button */}
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              onClick={() => setShowMediaSendModal(true)}
+              className="h-10 w-10 rounded-xl text-muted-foreground hover:text-foreground shrink-0"
+              title="Send Document, Photo, Audio, or Video"
+            >
+              <Paperclip className="w-4 h-4" />
+            </Button>
+
+            {/* Pre-Approved Meta WhatsApp Template Button */}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setShowPreApprovedModal(true)}
+              className="h-10 px-2 rounded-xl text-xs gap-1 shrink-0 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20 font-semibold"
+              title="Send Official Pre-Approved Meta Template"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Meta Template</span>
+            </Button>
+
             <Input
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
@@ -391,6 +424,43 @@ export const WhatsAppChatDialog: React.FC<WhatsAppChatDialogProps> = ({
         </div>
 
       </DialogContent>
+
+      {/* Official Pre-Approved Meta WhatsApp Template Modal */}
+      {showPreApprovedModal && (
+        <WhatsAppTemplateModal
+          open={showPreApprovedModal}
+          onOpenChange={setShowPreApprovedModal}
+          recipientPhone={rawPhoneNumber}
+          clientName={clientName}
+          serviceTitle={serviceTitle}
+          leadId={leadId}
+          ticketId={ticketId}
+          senderId={currentUser?.id}
+          senderName={currentUser?.name}
+          onTemplateSent={(newMsg) => {
+            setMessages(prev => [...prev, newMsg]);
+            loadHistory(true);
+          }}
+        />
+      )}
+
+      {/* WhatsApp Media & Documents Send Modal */}
+      {showMediaSendModal && (
+        <WhatsAppMediaSendModal
+          open={showMediaSendModal}
+          onOpenChange={setShowMediaSendModal}
+          recipientPhone={rawPhoneNumber}
+          clientName={clientName}
+          leadId={leadId}
+          ticketId={ticketId}
+          senderId={currentUser?.id}
+          senderName={currentUser?.name}
+          onMediaSent={(newMsg) => {
+            setMessages(prev => [...prev, newMsg]);
+            loadHistory(true);
+          }}
+        />
+      )}
     </Dialog>
   );
 };
