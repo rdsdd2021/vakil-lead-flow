@@ -120,6 +120,9 @@ export interface CRMUser {
   role: UserRole;
   email: string;
   phone?: string;
+  specialization?: string;
+  status?: 'active' | 'inactive';
+  created_at?: string;
 }
 
 export interface Document {

@@ -36,6 +36,9 @@ interface CRMContextType {
   fetchTickets: () => Promise<void>;
   fetchLawyers: () => Promise<void>;
   updateCurrentUserPhone: (phone: string) => void;
+  addUserToServer: (userData: Omit<CRMUser, 'id'> & { id?: string }) => Promise<void>;
+  updateUserInServer: (id: string, updates: Partial<CRMUser>) => Promise<void>;
+  deleteUserFromServer: (id: string) => Promise<void>;
 }
 
 import { mockLeads, mockTickets, mockUsers } from '@/data/mockData';
@@ -392,6 +395,66 @@ export const CRMProvider = ({ children }: { children: ReactNode }) => {
       }).catch(err => console.warn('[CRM] MySQL background ticket update deferred:', err.message));
     } catch (e) {}
   };
+
+  const addUserToServer = async (userData: Omit<CRMUser, 'id'> & { id?: string }) => {
+    const newUser: CRMUser = {
+      id: userData.id || `usr_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      name: userData.name,
+      email: userData.email,
+      phone: userData.phone ? userData.phone.replace(/\D/g, '').slice(-10) : '9800000001',
+      role: userData.role,
+      specialization: userData.specialization || (userData.role === 'lawyer' ? 'General Legal Practice' : ''),
+      status: userData.status || 'active',
+      created_at: new Date().toISOString(),
+    };
+
+    setUsers(prev => {
+      const updated = [...prev, newUser];
+      localStorage.setItem('vakil_users', JSON.stringify(updated));
+      return updated;
+    });
+    window.dispatchEvent(new Event('vakil_storage_sync'));
+
+    try {
+      fetch(`${API_BASE_URL}/api/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newUser),
+      }).catch(err => console.warn('[CRM] Users backend sync deferred:', err.message));
+    } catch (e) {}
+  };
+
+  const updateUserInServer = async (id: string, updates: Partial<CRMUser>) => {
+    setUsers(prev => {
+      const updated = prev.map(u => u.id === id ? { ...u, ...updates } : u);
+      localStorage.setItem('vakil_users', JSON.stringify(updated));
+      return updated;
+    });
+    window.dispatchEvent(new Event('vakil_storage_sync'));
+
+    try {
+      fetch(`${API_BASE_URL}/api/users`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...updates }),
+      }).catch(err => console.warn('[CRM] User update deferred:', err.message));
+    } catch (e) {}
+  };
+
+  const deleteUserFromServer = async (id: string) => {
+    setUsers(prev => {
+      const updated = prev.filter(u => u.id !== id);
+      localStorage.setItem('vakil_users', JSON.stringify(updated));
+      return updated;
+    });
+    window.dispatchEvent(new Event('vakil_storage_sync'));
+
+    try {
+      fetch(`${API_BASE_URL}/api/users?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      }).catch(err => console.warn('[CRM] User delete deferred:', err.message));
+    } catch (e) {}
+  };
   
   // Follow-ups: only surface explicitly scheduled items from followup_history.
   // Nothing is auto-derived or auto-generated — a follow-up only appears here
@@ -634,7 +697,10 @@ export const CRMProvider = ({ children }: { children: ReactNode }) => {
       fetchLeads,
       fetchTickets,
       fetchLawyers,
-      updateCurrentUserPhone
+      updateCurrentUserPhone,
+      addUserToServer,
+      updateUserInServer,
+      deleteUserFromServer,
     }}>
       {children}
     </CRMContext.Provider>
