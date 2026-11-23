@@ -66,6 +66,9 @@ export default defineConfig(({ mode }) => ({
       },
       // Import the custom service worker for push notification handling
       workbox: {
+        cleanupOutdatedCaches: true,
+        skipWaiting: true,
+        clientsClaim: true,
         importScripts: ["custom-sw.js"],
       },
     }),

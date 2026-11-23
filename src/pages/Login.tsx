@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useCRM } from '@/contexts/CRMContext';
 import { mockUsers } from '@/data/mockData';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { handleLoginSuccess } = useCRM();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,7 +54,8 @@ const Login = () => {
     });
     setIsLoading(false);
     toast.success(`Signed in as ${matched.name}`);
-    navigate('/');
+    const from = (location.state as any)?.from?.pathname || '/';
+    navigate(from === '/login' ? '/' : from, { replace: true });
   };
 
   return (
