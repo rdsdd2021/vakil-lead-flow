@@ -77,6 +77,7 @@ export default async function handler(req, res) {
       },
     ];
 
+    const cleanCaller = to10DigitPhone(callerId);
     console.log(`[Smartflo Dialplan Final Decision] Incoming: ${cleanCaller} -> ${targetAgentName} (${final10DigitPhone})`);
     return res.status(200).json(smartfloResponse);
   } catch (err) {
