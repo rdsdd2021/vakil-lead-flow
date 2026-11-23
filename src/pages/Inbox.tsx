@@ -429,7 +429,11 @@ export const Inbox: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen w-full bg-background overflow-hidden pb-16 md:pb-0">
+    <div className={`flex w-full bg-background overflow-hidden ${
+      selectedPhone 
+        ? 'h-[100dvh] md:h-[calc(100dvh-4rem)]' 
+        : 'h-[calc(100dvh-4rem)]'
+    }`}>
       
       {/* ──────────────────────────────────────────────────────────
           LEFT PANE: WhatsApp Web Conversation List
@@ -742,12 +746,37 @@ export const Inbox: React.FC = () => {
                   <span className="text-xs">Loading message thread...</span>
                 </div>
               ) : messages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground gap-2">
-                  <Bot className="w-10 h-10 text-emerald-500/50 mb-1" />
-                  <p className="text-sm font-semibold text-foreground">No prior WhatsApp messages</p>
-                  <p className="text-xs text-muted-foreground max-w-sm">
-                    Select a quick legal template below or type a custom message to initiate consultation on WhatsApp.
-                  </p>
+                <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground gap-3 my-auto">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400 mb-1">
+                    <Bot className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">No prior WhatsApp messages</p>
+                    <p className="text-xs text-muted-foreground max-w-sm mt-0.5">
+                      Send an official pre-approved Meta template or attach files/audio to start the consultation.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => setShowPreApprovedModal(true)}
+                      className="gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-xs"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      Send Meta Template
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setShowMediaSendModal(true)}
+                      className="gap-1.5 text-xs rounded-xl border-border bg-card hover:bg-muted font-medium"
+                    >
+                      <Paperclip className="w-3.5 h-3.5" />
+                      Attach Media / Audio
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 messages.map((msg, index) => {
@@ -858,14 +887,14 @@ export const Inbox: React.FC = () => {
             )}
 
             {/* WhatsApp Web Message Composer (Footer) */}
-            <div className="p-3 border-t border-border bg-card/95 backdrop-blur-md flex items-center gap-2 shrink-0">
+            <div className="p-3 border-t border-border bg-card/95 backdrop-blur-md flex items-center gap-2 shrink-0 z-20 shadow-xs">
               {/* Media Attachment Button (Images, Documents, Audio, Video) */}
               <Button
                 type="button"
                 size="icon"
-                variant="ghost"
+                variant="outline"
                 onClick={() => setShowMediaSendModal(true)}
-                className="h-10 w-10 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted shrink-0"
+                className="h-10 w-10 rounded-xl text-muted-foreground hover:text-foreground border-border hover:bg-muted shrink-0"
                 title="Send Media (Photo, Document/PDF, Voice Note, Video)"
               >
                 <Paperclip className="w-4 h-4" />
@@ -877,7 +906,7 @@ export const Inbox: React.FC = () => {
                 size="sm"
                 variant="outline"
                 onClick={() => setShowPreApprovedModal(true)}
-                className="h-10 px-2.5 rounded-xl text-xs gap-1.5 shrink-0 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20 font-semibold"
+                className="h-10 px-3 rounded-xl text-xs gap-1.5 shrink-0 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25 font-semibold"
                 title="Send Official Pre-Approved Meta Template"
               >
                 <Sparkles className="w-3.5 h-3.5" />
@@ -910,7 +939,7 @@ export const Inbox: React.FC = () => {
                     handleSendMessage();
                   }
                 }}
-                placeholder="Type a WhatsApp message..."
+                placeholder="Type a WhatsApp message to client..."
                 disabled={isSending}
                 className="flex-1 h-10 text-xs bg-muted/40 border-border/70 rounded-xl focus-visible:ring-1 focus-visible:ring-emerald-500"
               />
@@ -922,6 +951,7 @@ export const Inbox: React.FC = () => {
                 disabled={!inputText.trim() || isSending}
                 size="icon"
                 className="h-10 w-10 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 shadow-sm"
+                title="Send Message"
               >
                 {isSending ? (
                   <RotateCw className="w-4 h-4 animate-spin" />

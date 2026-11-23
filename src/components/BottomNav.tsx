@@ -9,10 +9,19 @@ export const BottomNav = () => {
 
   if (!isAuthenticated) return null;
 
+  // When a specific chat is open on /inbox on mobile, hide the bottom CRM nav bar
+  // so the WhatsApp message composer and keyboard have full-screen space
+  const searchParams = new URLSearchParams(location.search);
+  const isInboxChatActive = location.pathname === '/inbox' && Boolean(searchParams.get('phone'));
+  const navClass = cn(
+    "fixed bottom-0 left-0 right-0 z-50 border-t bg-card/95 backdrop-blur-lg safe-area-bottom",
+    isInboxChatActive && "hidden md:flex"
+  );
+
   // Lawyer nav
   if (currentRole === 'lawyer') {
     return (
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-card/95 backdrop-blur-lg safe-area-bottom">
+      <nav className={navClass}>
         <div className="flex items-center justify-around h-16 max-w-lg mx-auto px-2">
           {[
             { to: '/tickets', icon: Users, label: 'My Tickets' },
@@ -48,7 +57,7 @@ export const BottomNav = () => {
       { to: '/more', icon: MoreHorizontal, label: 'More' },
     ];
     return (
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-card/95 backdrop-blur-lg">
+      <nav className={navClass}>
         <div className="flex items-center justify-around h-16 max-w-lg mx-auto px-2">
           {tabs.map(({ to, icon: Icon, label }) => {
             const active = location.pathname === to;
@@ -79,7 +88,7 @@ export const BottomNav = () => {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-card/95 backdrop-blur-lg">
+    <nav className={navClass}>
       <div className="flex items-center justify-around h-16 max-w-lg mx-auto px-2">
         {tabs.map(({ to, icon: Icon, label }) => {
           const active = location.pathname === to;
