@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { UserRole } from '@/types/crm';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, Ticket, Users, Shield, Briefcase, ChevronRight, LogOut, Bell, BellOff, BellRing, Loader2, PhoneIncoming } from 'lucide-react';
+import { BarChart3, Ticket, Users, Shield, Briefcase, ChevronRight, LogOut, Bell, BellOff, BellRing, Loader2, PhoneIncoming, MessageSquare } from 'lucide-react';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { SmartfloDialplanSettings } from '@/components/SmartfloDialplanSettings';
 import { toast } from 'sonner';
@@ -54,6 +54,7 @@ const MorePage = () => {
   };
 
   const menuItems = [
+    { label: 'WhatsApp Inbox', icon: <MessageSquare className="w-4 h-4 text-emerald-500" />, onClick: () => navigate('/inbox') },
     ...(currentRole !== 'lawyer' ? [{ label: 'Tickets', icon: <Ticket className="w-4 h-4" />, onClick: () => navigate('/tickets') }] : []),
     ...(currentRole === 'super_admin' ? [
       { label: 'Analytics', icon: <BarChart3 className="w-4 h-4" />, onClick: () => navigate('/analytics') },

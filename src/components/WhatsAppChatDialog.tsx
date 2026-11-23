@@ -18,6 +18,7 @@ import {
 } from '@/lib/kapso';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 
 interface WhatsAppChatDialogProps {
   open: boolean;
@@ -39,6 +40,7 @@ export const WhatsAppChatDialog: React.FC<WhatsAppChatDialogProps> = ({
   serviceTitle,
 }) => {
   const { currentUser, currentRole, addActivityLog } = useCRM();
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<WhatsAppMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -204,6 +206,18 @@ export const WhatsAppChatDialog: React.FC<WhatsAppChatDialogProps> = ({
                 disabled={isLoading}
               >
                 <RotateCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 text-white hover:bg-white/20 rounded-lg"
+                title="Open in WhatsApp Inbox"
+                onClick={() => {
+                  onOpenChange(false);
+                  navigate(`/inbox?phone=${rawPhoneNumber}`);
+                }}
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
               </Button>
               <Button
                 size="icon"

@@ -20,12 +20,10 @@ export default async function handler(req, res) {
   const { phone } = req.query;
   const cleanPhone = formatWhatsAppNumber(phone);
 
-  if (!cleanPhone) {
-    return res.status(200).json([]);
-  }
-
   try {
-    const url = `https://api.kapso.ai/platform/v1/whatsapp/messages?phone_number=${cleanPhone}&limit=50`;
+    const url = cleanPhone 
+      ? `https://api.kapso.ai/platform/v1/whatsapp/messages?phone_number=${cleanPhone}&limit=50`
+      : 'https://api.kapso.ai/platform/v1/whatsapp/messages?limit=100';
     const resp = await fetch(url, {
       method: 'GET',
       headers: {

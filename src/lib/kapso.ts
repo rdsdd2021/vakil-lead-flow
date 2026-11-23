@@ -20,6 +20,27 @@ export interface WhatsAppMessage {
   read_at?: string | null;
 }
 
+export interface WhatsAppConversation {
+  id: string;
+  phone_number: string;
+  contact_name: string;
+  last_message: string;
+  last_message_timestamp: string;
+  last_message_type: string;
+  last_message_id?: string | null;
+  messages_count: number;
+  status: string;
+  updated_at?: string;
+  unread_count?: number;
+  last_direction?: 'inbound' | 'outbound';
+  last_status?: 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
+  lead_id?: string;
+  ticket_id?: string;
+  service_title?: string;
+  assigned_agent_id?: string | null;
+  assigned_agent_name?: string | null;
+}
+
 export interface QuickLegalTemplate {
   id: string;
   title: string;
@@ -225,4 +246,40 @@ export async function markWhatsAppMessageReadApi(messageId: string): Promise<boo
   } catch (e) {
     return false;
   }
+}
+
+/**
+ * Fetch all WhatsApp conversations from serverless backend or local fallback
+ */
+export async function fetchWhatsAppConversations(): Promise<WhatsAppConversation[]> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+
+    const res = await fetch(`${API_BASE_URL}/api/whatsapp/conversations`, {
+      signal: controller.signal,
+    }).catch(() => null);
+
+    clearTimeout(timer);
+
+    if (res && res.ok) {
+      const data: WhatsAppConversation[] = await res.json();
+      if (Array.isArray(data)) {
+        localStorage.setItem('vakil_wa_conversations', JSON.stringify(data));
+        return data;
+      }
+    }
+  } catch (err) {
+    console.warn('[WhatsApp] Conversations fetch failed, checking cache:', err);
+  }
+
+  // Local fallback
+  const cached = localStorage.getItem('vakil_wa_conversations');
+  if (cached) {
+    try {
+      return JSON.parse(cached);
+    } catch (e) {}
+  }
+
+  return [];
 }

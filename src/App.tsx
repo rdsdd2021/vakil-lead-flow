@@ -20,6 +20,7 @@ import MorePage from "./pages/MorePage";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import LeadIntake from "./pages/LeadIntake";
+import Inbox from "./pages/Inbox";
 import { NotificationPrompt } from "./components/NotificationPrompt";
 import { CallbackNotificationBanner } from "./components/CallbackNotificationBanner";
 
@@ -63,6 +64,7 @@ const App = () => (
             <Route path="/" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
             <Route path="/leads" element={<ProtectedRoute><LeadsDashboard /></ProtectedRoute>} />
+            <Route path="/inbox" element={<ProtectedRoute><Inbox /></ProtectedRoute>} />
             <Route path="/lead/:id" element={<ProtectedRoute><LeadDetail /></ProtectedRoute>} />
             <Route path="/pipeline" element={<ProtectedRoute><Pipeline /></ProtectedRoute>} />
             <Route path="/followups" element={<ProtectedRoute><FollowUps /></ProtectedRoute>} />
