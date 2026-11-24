@@ -9,7 +9,7 @@ export const mockUsers: CRMUser[] = [
   { id: 'lawyer', name: 'Adv. Meera Patel', role: 'lawyer', email: 'lawyer@vakiltech.com', phone: '9800000006' },
 ];
 
-// Production Clean: Zero dummy leads or tickets
+// Production Clean: Zero dummy leads or tickets (dynamically loaded from Kapso & serverless API)
 export const mockLeads: Lead[] = [];
 export const mockTickets: Ticket[] = [];
 export const mockNotes: Note[] = [];

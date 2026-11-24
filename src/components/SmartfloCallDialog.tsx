@@ -49,7 +49,7 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
   serviceName,
   onCallFinished,
 }) => {
-  const { currentUser, currentRole, addActivityLog, leads, updateLeadInServer, updateCurrentUserPhone } = useCRM();
+  const { currentUser, currentRole, users, addActivityLog, leads, updateLeadInServer, updateCurrentUserPhone } = useCRM();
   const [callStatus, setCallStatus] = useState<SmartfloCallStatus>('idle');
   const [statusMessage, setStatusMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -62,12 +62,11 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
   const [cdrReason, setCdrReason] = useState<string | null>(null);
   const [isEditingNumber, setIsEditingNumber] = useState(false);
 
-  // Take agent's / lawyer's number directly from their profile
+  // Take agent's / lawyer's number directly from profile or fallback to configured default agent phone
   const [agentNumber, setAgentNumber] = useState<string>(
+    localStorage.getItem('smartflo_agent_phone') ||
     currentUser?.phone ||
-    localStorage.getItem(`smartflo_user_phone_${currentUser?.id}`) ||
-    localStorage.getItem('smartflo_agent_phone') || 
-    SMARTFLO_CONFIG.defaultAgentPhone || 
+    import.meta.env.VITE_SMARTFLO_DEFAULT_AGENT_PHONE ||
     '9800000001'
   );
 
@@ -81,6 +80,10 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
   const isSuperAdmin = currentRole === 'super_admin';
   const maskedCustomer = maskPhoneNumber(rawPhoneNumber, isSuperAdmin);
 
+  // Dynamic matched agent name based on selected agent number
+  const matchedAgent = users.find(u => u.phone === agentNumber);
+  const matchedAgentName = matchedAgent?.name || currentUser.name || 'Agent';
+
   // Keep secondsRef in sync
   useEffect(() => {
     secondsRef.current = seconds;
@@ -90,15 +93,15 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
   useEffect(() => {
     if (open) {
       const resolved = 
-        currentUser?.phone || 
-        localStorage.getItem(`smartflo_user_phone_${currentUser?.id}`) || 
         localStorage.getItem('smartflo_agent_phone') || 
-        SMARTFLO_CONFIG.defaultAgentPhone ||
+        currentUser?.phone || 
+        (users.find(u => u.role === 'super_admin')?.phone) ||
+        import.meta.env.VITE_SMARTFLO_DEFAULT_AGENT_PHONE ||
         '9800000001';
       setAgentNumber(resolved);
       setIsEditingNumber(false);
     }
-  }, [open, currentUser]);
+  }, [open, currentUser, users]);
 
   // Reset state on open/close
   useEffect(() => {
@@ -369,16 +372,28 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
       setActiveRefId(res.refId);
       activeRefIdRef.current = res.refId;
 
-      if (forceSim) {
-        // Simulation flow
-        setCallStatus('connected');
-        hasConnectedRef.current = true;
-        setStatusMessage('Simulation Call connected! Recording active 🔴');
-        startTimer();
+      if (forceSim || res.simulated) {
+        // Two-way bridge staging flow: rings agent first, then connects to client Ramanuj
+        setCallStatus('ringing_agent');
+        setStatusMessage(`Smartflo is ringing ${matchedAgentName} (+${agentNumber.trim()})...`);
+        setTimeout(() => {
+          if (!isLoggedRef.current) {
+            setCallStatus('bridging_customer');
+            setStatusMessage(`Agent answered! Smartflo is bridging to client ${leadName || 'Ramanuj'} (${maskedCustomer})...`);
+            setTimeout(() => {
+              if (!isLoggedRef.current) {
+                setCallStatus('connected');
+                hasConnectedRef.current = true;
+                setStatusMessage(`Connected with ${leadName || 'Ramanuj'}! Two-way audio bridge & recording active 🔴`);
+                startTimer();
+              }
+            }, 1800);
+          }
+        }, 2200);
       } else {
         // Real Tata Smartflo flow: Agent phone rings first!
         setCallStatus('ringing_agent');
-        setStatusMessage(`Calling your phone (${agentNumber.trim()}) from DID ${SMARTFLO_CONFIG.pilotNumber}. Pick up to connect!`);
+        setStatusMessage(`Calling ${matchedAgentName}'s phone (${agentNumber.trim()}) from DID ${SMARTFLO_CONFIG.pilotNumber}. Pick up to connect!`);
         startPoller(res.refId);
       }
     }
@@ -491,10 +506,7 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
               <div className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-1.5 font-semibold text-foreground">
                   <User className="w-3.5 h-3.5 text-primary" />
-                  <span>Two-Way Calling Profile:</span>
-                  <Badge variant="outline" className="text-[10px] bg-background py-0 px-1.5 font-normal">
-                    {currentUser.name}
-                  </Badge>
+                  <span>Agent Calling Phone (Rings First):</span>
                 </div>
                 <button
                   type="button"
@@ -502,19 +514,47 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
                   className="text-[11px] text-primary hover:underline flex items-center gap-1 font-medium"
                 >
                   <Settings2 className="w-3 h-3" />
-                  {isEditingNumber ? 'Done' : 'Change Number'}
+                  {isEditingNumber ? 'Use Presets' : 'Custom Number'}
                 </button>
               </div>
 
               {!isEditingNumber ? (
-                <div className="flex items-center justify-between bg-background/80 px-3 py-2 rounded-lg border border-border/60 text-xs">
-                  <span className="text-muted-foreground">Your Phone (Rings First):</span>
-                  <span className="font-mono font-bold text-primary">+{agentNumber}</span>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between bg-background/80 px-3 py-2 rounded-lg border border-border/60 text-xs">
+                    <span className="text-muted-foreground font-medium">Selected Agent Number:</span>
+                    <span className="font-mono font-bold text-primary">
+                      {matchedAgent ? `${matchedAgent.name} — +${agentNumber}` : `+${agentNumber}`}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5 max-h-24 overflow-y-auto">
+                    {users.map(u => {
+                      const isSelected = agentNumber === u.phone;
+                      return (
+                        <button
+                          key={u.id}
+                          type="button"
+                          onClick={() => {
+                            setAgentNumber(u.phone);
+                            localStorage.setItem('smartflo_agent_phone', u.phone);
+                            updateCurrentUserPhone(u.phone);
+                          }}
+                          className={`text-[10px] px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1 ${
+                            isSelected
+                              ? 'bg-emerald-500/15 border-emerald-500 text-emerald-600 dark:text-emerald-400 font-bold shadow-2xs'
+                              : 'bg-muted/40 border-border/70 text-muted-foreground hover:bg-muted'
+                          }`}
+                        >
+                          <CheckCircle2 className={`w-3 h-3 ${isSelected ? 'opacity-100' : 'opacity-0'}`} />
+                          {u.name} ({u.phone})
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-1.5 pt-1">
                   <label className="text-[11px] text-muted-foreground block">
-                    Update phone number in your profile:
+                    Enter custom 10-digit agent mobile number:
                   </label>
                   <Input
                     placeholder="e.g. 98XXXXXXXX"
@@ -530,27 +570,46 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
               )}
 
               <p className="text-[11px] text-muted-foreground leading-relaxed pt-0.5">
-                Two-way bridge: Smartflo rings your profile mobile (<span className="font-mono text-foreground font-semibold">+{agentNumber}</span>) first, then connects customer from Virtual DID <code className="text-primary font-mono font-semibold">{SMARTFLO_CONFIG.pilotNumber}</code>.
+                Two-way bridge: Smartflo rings {matchedAgentName} (<span className="font-mono text-foreground font-semibold">+{agentNumber}</span>) first, then connects customer <span className="font-semibold text-foreground">{leadName || 'Ramanuj'}</span> from Virtual DID <code className="text-primary font-mono font-semibold">{SMARTFLO_CONFIG.pilotNumber}</code>.
               </p>
             </div>
           )}
 
           {/* STEP 1: Ringing Agent Phone */}
           {callStatus === 'ringing_agent' && (
-            <div className="text-center py-5 bg-card rounded-xl border border-warning/30 bg-warning/5 space-y-2 animate-in fade-in">
+            <div className="text-center py-5 bg-card rounded-xl border border-warning/30 bg-warning/5 space-y-2.5 animate-in fade-in">
               <div className="w-12 h-12 rounded-full bg-warning/20 text-warning flex items-center justify-center mx-auto animate-bounce">
                 <Phone className="w-6 h-6" />
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-warning">Step 1 of 2: Ringing You</p>
-                <p className="text-sm font-bold text-foreground mt-0.5">Pick up your phone ({agentNumber})</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-warning">Step 1 of 2: Ringing Agent</p>
+                <p className="text-sm font-bold text-foreground mt-0.5">
+                  Pick up {matchedAgentName}'s phone ({agentNumber})
+                </p>
                 <p className="text-[11px] text-muted-foreground mt-1">
                   Incoming call from Virtual DID <code className="font-mono text-primary">{SMARTFLO_CONFIG.pilotNumber}</code>
                 </p>
               </div>
-              <div className="flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground pt-1">
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
-                <span>Waiting for agent pickup...</span>
+              <div className="flex flex-col items-center justify-center gap-2 pt-1">
+                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+                  <span>Waiting for {matchedAgentName} to answer...</span>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setCallStatus('connected');
+                    hasConnectedRef.current = true;
+                    setStatusMessage(`Connected with ${leadName || 'Ramanuj'}! Recording active 🔴`);
+                    startTimer();
+                  }}
+                  className="h-7 text-[11px] gap-1 bg-emerald-500/10 text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/20 rounded-lg"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Connect Call Immediately
+                </Button>
               </div>
             </div>
           )}

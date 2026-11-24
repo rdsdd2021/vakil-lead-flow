@@ -211,7 +211,7 @@ export const Inbox: React.FC = () => {
     const match = conversations.find(c => cleanPhoneDigits(c.phone_number).slice(-10) === last10);
     if (match) return match;
 
-    // Fallback: If navigating directly to a phone number (e.g. /inbox?phone=918250622813)
+    // Fallback: If navigating directly to a phone number (e.g. /inbox?phone=...)
     // create an immediate conversation container so messages load and chat renders immediately
     const { matchedLead, matchedTicket } = findLinkedEntities(selectedPhone);
     const assignedId = matchedTicket?.lawyer_id || matchedLead?.assigned_lawyer_id || null;

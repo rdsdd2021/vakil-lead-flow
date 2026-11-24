@@ -1,6 +1,6 @@
 // In-memory / persistent seed for Vercel serverless environment
 let USERS_STORE = [
-  { id: 'admin', name: 'Priya Sharma (Super Admin)', email: 'admin@vakiltech.com', phone: '9800000001', role: 'super_admin', status: 'active', specialization: 'Managing Partner' },
+  { id: 'admin', name: 'Priya Sharma (Super Admin)', email: 'admin@vakiltech.com', phone: process.env.ADMIN_DEFAULT_PHONE || '9800000001', role: 'super_admin', status: 'active', specialization: 'Managing Partner' },
   { id: 'frontdesk', name: 'Rahul Verma (Front Desk)', email: 'frontdesk@vakiltech.com', phone: '9800000002', role: 'front_desk', status: 'active', specialization: 'Client Intake & Onboarding' },
   { id: 'devika', name: 'Adv. Devika', email: 'devika@vakiltech.com', phone: '9800000003', role: 'lawyer', status: 'active', specialization: 'Corporate & Contract Drafting' },
   { id: 'aaditya', name: 'Adv. Aaditya', email: 'aaditya@vakiltech.com', phone: '9800000004', role: 'lawyer', status: 'active', specialization: 'Civil & Property Disputes' },

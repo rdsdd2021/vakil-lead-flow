@@ -87,7 +87,7 @@ const MorePage = () => {
             <div>
               <p className="text-[11px] font-medium text-foreground">Calling Phone (Smartflo 2-Way Ring)</p>
               <p className="text-xs font-mono text-primary font-semibold">
-                +91 {currentUser.phone || '9800000001'}
+                +91 {currentUser.phone || import.meta.env.VITE_SMARTFLO_DEFAULT_AGENT_PHONE || '9800000001'}
               </p>
             </div>
             <Button
@@ -95,7 +95,7 @@ const MorePage = () => {
               variant="outline"
               className="h-7 text-xs rounded-lg px-2"
               onClick={() => {
-                const val = prompt('Enter your 10-digit mobile number for Smartflo two-way calls:', currentUser.phone || '9800000001');
+                const val = prompt('Enter your 10-digit mobile number for Smartflo two-way calls:', currentUser.phone || import.meta.env.VITE_SMARTFLO_DEFAULT_AGENT_PHONE || '9800000001');
                 if (val) {
                   const clean = val.replace(/\D/g, '').slice(-10);
                   if (clean.length === 10) {
