@@ -239,11 +239,10 @@ export async function initiateSmartfloCall(
  * Checks for live active calls on Tata Smartflo.
  */
 export async function fetchSmartfloLiveCalls(agentNumber?: string): Promise<any[]> {
-  const cleanAgent = agentNumber ? agentNumber.replace(/^\+/, '').replace(/\s/g, '').replace(/\D/g, '') : '';
-  const query = cleanAgent ? `?agent_number=${cleanAgent}` : '';
+  const cleanAgent = agentNumber ? agentNumber.replace(/\D/g, '').slice(-10) : '';
   const endpoints = [
-    `/api/smartflo/v1/live_calls${query}`,
-    `/api/smartflo/v1/click_to_call?action=live_calls${cleanAgent ? `&agent_number=${cleanAgent}` : ''}`,
+    '/api/smartflo/v1/live_calls',
+    '/api/smartflo/v1/click_to_call?action=live_calls',
   ];
 
   for (const ep of endpoints) {
@@ -256,7 +255,11 @@ export async function fetchSmartfloLiveCalls(agentNumber?: string): Promise<any[
       });
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
+          if (cleanAgent && data.length > 0) {
+            const filtered = data.filter(c => JSON.stringify(c).includes(cleanAgent));
+            if (filtered.length > 0) return filtered;
+          }
           return data;
         }
       }
@@ -277,11 +280,11 @@ export async function fetchSmartfloCallRecord(
   callStartTime?: number
 ): Promise<SmartfloCallRecord | null> {
   const endpoints = [
-    '/api/smartflo/v1/call/records?direction=outbound&limit=10',
-    '/api/smartflo/v1/click_to_call?action=records&direction=outbound&limit=10',
+    '/api/smartflo/v1/call/records?limit=15',
+    '/api/smartflo/v1/click_to_call?action=records&limit=15',
   ];
 
-  const cleanClient = clientNumber ? clientNumber.replace(/^\+/, '').replace(/\s/g, '').replace(/\D/g, '').slice(-10) : '';
+  const cleanClient = clientNumber ? clientNumber.replace(/\D/g, '').slice(-10) : '';
 
   for (const ep of endpoints) {
     try {
@@ -295,26 +298,24 @@ export async function fetchSmartfloCallRecord(
         const data = await res.json();
         const records: SmartfloCallRecord[] = data.results || [];
 
-        // 1. Strict match by ref_id (Guaranteed match for the exact active session)
+        // 1. Match by ref_id if available
         if (refId) {
-          const match = records.find(r => r.ref_id === refId);
+          const match = records.find(r => r.ref_id === refId || r.call_id === refId);
           if (match) return match;
-          // CRITICAL BUG FIX: If refId is specified and not found yet in CDR, DO NOT
-          // fall through to older historical calls from earlier today!
-          return null;
         }
 
-        // 2. Only match by customer phone if timestamp is AFTER callStartTime
+        // 2. Also match by customer phone if record timestamp is after or around callStartTime
         if (cleanClient && callStartTime) {
           const match = records.find(r => {
-            const num = (r.client_number || '').replace(/^\+/, '').replace(/\s/g, '').replace(/\D/g, '');
-            if (!num.endsWith(cleanClient)) return false;
+            const num = (r.client_number || '').replace(/\D/g, '');
+            if (!num.endsWith(cleanClient) && !cleanClient.endsWith(num.slice(-10))) return false;
 
             if (r.date && r.time) {
               const recordTime = new Date(`${r.date}T${r.time}`).getTime();
-              return recordTime >= (callStartTime - 10000);
+              // Allow up to 30s before callStartTime for PBX clock drift
+              return recordTime >= (callStartTime - 30000);
             }
-            return false;
+            return true;
           });
           if (match) return match;
         }

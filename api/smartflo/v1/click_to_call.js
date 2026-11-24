@@ -17,15 +17,20 @@ export default async function handler(req, res) {
 
     if (action === 'live_calls' || req.url.includes('live_calls')) {
       try {
-        const query = agent_number ? `?agent_number=${agent_number}` : '';
-        const tataRes = await fetch(`https://${SMARTFLO_API_HOST}/v1/live_calls${query}`, {
+        const tataRes = await fetch(`https://${SMARTFLO_API_HOST}/v1/live_calls`, {
           headers: {
             'Authorization': `Bearer ${SMARTFLO_API_TOKEN}`,
             'Accept': 'application/json',
           },
         });
         const data = await tataRes.json().catch(() => []);
-        return res.status(200).json(Array.isArray(data) ? data : []);
+        const list = Array.isArray(data) ? data : [];
+        if (agent_number) {
+          const clean = String(agent_number).replace(/\D/g, '').slice(-10);
+          const filtered = list.filter(c => JSON.stringify(c).includes(clean));
+          return res.status(200).json(filtered.length > 0 ? filtered : list);
+        }
+        return res.status(200).json(list);
       } catch (e) {
         return res.status(200).json([]);
       }

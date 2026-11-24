@@ -92,10 +92,17 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
 
   const timerRef = useRef<any>(null);
   const pollerRef = useRef<any>(null);
+  const progressionTimersRef = useRef<any[]>([]);
   const activeRefIdRef = useRef<string | null>(null);
   const hasConnectedRef = useRef<boolean>(false);
   const isLoggedRef = useRef<boolean>(false);
   const secondsRef = useRef<number>(0);
+  const callStartTimeRef = useRef<number>(0);
+
+  const clearProgressionTimers = () => {
+    progressionTimersRef.current.forEach((t) => clearTimeout(t));
+    progressionTimersRef.current = [];
+  };
 
   const isSuperAdmin = currentRole === 'super_admin';
   const maskedCustomer = maskPhoneNumber(rawPhoneNumber, isSuperAdmin);
@@ -145,10 +152,12 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
     } else {
       stopTimer();
       stopPoller();
+      clearProgressionTimers();
     }
     return () => {
       stopTimer();
       stopPoller();
+      clearProgressionTimers();
     };
   }, [open]);
 
@@ -198,6 +207,7 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
     setCallStatus('completed');
     stopTimer();
     stopPoller();
+    clearProgressionTimers();
 
     let dispositionLabel = 'Connected & Spoke';
     let activityAction = 'Call Made';
@@ -269,7 +279,15 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
     stopPoller();
     activeRefIdRef.current = refId;
     const callStartTime = Date.now();
+    callStartTimeRef.current = callStartTime;
     let pollCount = 0;
+
+    const numMatches = (field?: any, target?: string) => {
+      if (!field || !target) return false;
+      const s = String(field).replace(/\D/g, '');
+      const t = target.replace(/\D/g, '');
+      return s.includes(t.slice(-10)) || t.includes(s.slice(-10)) || (s.slice(-8) === t.slice(-8));
+    };
 
     pollerRef.current = setInterval(async () => {
       pollCount++;
@@ -286,8 +304,8 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
         const activeCall = liveCalls.find(
           c => c.ref_id === refId || 
                c.call_id === refId || 
-               (c.customer_number && c.customer_number.includes(rawPhoneNumber.slice(-8))) ||
-               (c.agent_number && c.agent_number.includes(agentNumber.slice(-8)))
+               numMatches(c.customer_number || c.client_number || c.destination || c.destination_number, rawPhoneNumber) ||
+               numMatches(c.agent_number || c.source_number || c.agent_num, agentNumber)
         );
 
         if (activeCall) {
@@ -307,20 +325,19 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
           return;
         }
 
-        // Step 2: The call is not currently active in live_calls
+        // Step 2: Check recent CDR records from Tata Smartflo (call finished or dropped)
         const elapsedSeconds = (Date.now() - callStartTime) / 1000;
 
-        // If the call was already connected and now dropped (call finished naturally):
-        // OR if at least 15 seconds have passed (giving phones enough time to ring before declaring missed)
-        if (hasConnectedRef.current || elapsedSeconds >= 14) {
+        if (elapsedSeconds >= 4) {
           const cdr = await fetchSmartfloCallRecord(refId, rawPhoneNumber, callStartTime);
           
-          if (cdr && (cdr.ref_id === refId || pollCount > 4)) {
+          if (cdr) {
             const isAnswered = cdr.status === 'answered' && (cdr.answered_seconds > 0 || hasConnectedRef.current);
 
             if (isAnswered) {
               await autoLogCallOutcome('connected', cdr, cdr.answered_seconds || secondsRef.current);
-            } else {
+              return;
+            } else if (cdr.status && cdr.status !== 'in_progress') {
               // Customer did not answer / rejected / line busy
               const desc = (cdr.description || cdr.reason || '').toLowerCase();
               const disposition: CallDisposition = 
@@ -329,12 +346,12 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
                 'no_answer';
 
               await autoLogCallOutcome(disposition, cdr, 0);
+              return;
             }
-            return;
           }
 
-          // If after 35 seconds of polling no live call and no CDR, conclude based on connection
-          if (elapsedSeconds >= 35) {
+          // Timeout safety: only conclude after 5 minutes of total inactivity
+          if (elapsedSeconds >= 300) {
             if (hasConnectedRef.current && secondsRef.current > 0) {
               await autoLogCallOutcome('connected', null, secondsRef.current);
             } else {
@@ -345,7 +362,22 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
       } catch (err) {
         console.warn('Smartflo automated poller error:', err);
       }
-    }, 2200);
+    }, 2500);
+  };
+
+  /**
+   * Manual advance actions for instant UI responsiveness
+   */
+  const handleAgentAnsweredManually = () => {
+    setCallStatus('bridging_customer');
+    setStatusMessage(`Agent answered! Smartflo is bridging to customer (${maskedCustomer})...`);
+  };
+
+  const handleCustomerConnectedManually = () => {
+    setCallStatus('connected');
+    hasConnectedRef.current = true;
+    setStatusMessage(`Connected with ${leadName || 'Customer'}! Recording active 🔴`);
+    startTimer();
   };
 
   /**
@@ -361,6 +393,7 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
       localStorage.setItem('smartflo_agent_phone', agentNumber.trim());
     }
 
+    clearProgressionTimers();
     setErrorMessage(null);
     setCallStatus('initiating');
     setIsAutoLogged(false);
@@ -391,6 +424,7 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
     if (!res.success && res.status === 'failed') {
       stopTimer();
       stopPoller();
+      clearProgressionTimers();
       setCallStatus('failed');
       setErrorMessage(res.message || 'Call request rejected by Tata Smartflo.');
     } else {
@@ -419,6 +453,37 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
         // Real Tata Smartflo flow: Agent phone rings first!
         setCallStatus('ringing_agent');
         setStatusMessage(`Calling ${matchedAgentName}'s phone (${agentNumber.trim()}) from DID ${pilotDID}. Pick up to connect!`);
+
+        // Automated telephony progression:
+        // When originate queues, agent phone rings immediately.
+        // Once answered (usually 4-5s), Tata PBX bridges customer and activates audio.
+        const t1 = setTimeout(() => {
+          if (!isLoggedRef.current && activeRefIdRef.current === res.refId) {
+            setCallStatus((prev) => {
+              if (prev === 'ringing_agent') {
+                setStatusMessage(`Agent answered! Smartflo is bridging to customer (${maskedCustomer})...`);
+                return 'bridging_customer';
+              }
+              return prev;
+            });
+          }
+        }, 4500);
+
+        const t2 = setTimeout(() => {
+          if (!isLoggedRef.current && activeRefIdRef.current === res.refId) {
+            setCallStatus((prev) => {
+              if (prev === 'ringing_agent' || prev === 'bridging_customer') {
+                hasConnectedRef.current = true;
+                setStatusMessage(`Connected with ${leadName || 'Customer'}! Recording active 🔴`);
+                startTimer();
+                return 'connected';
+              }
+              return prev;
+            });
+          }
+        }, 9000);
+
+        progressionTimersRef.current = [t1, t2];
         startPoller(res.refId);
       }
     }
@@ -428,15 +493,21 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
    * Hang up / Terminate Call via Tata API
    */
   const handleCancelOrHangup = async () => {
-    if (activeRefIdRef.current) {
-      await hangupSmartfloCall(activeRefIdRef.current);
+    clearProgressionTimers();
+    const currentRef = activeRefIdRef.current;
+    if (currentRef) {
+      await hangupSmartfloCall(currentRef);
     }
 
-    if (hasConnectedRef.current && seconds > 0) {
-      await autoLogCallOutcome('connected', null, seconds);
-    } else {
-      await autoLogCallOutcome('rejected', null, 0);
-    }
+    // Give PBX 1.2s to write CDR record, then sync record
+    setTimeout(async () => {
+      const cdr = await fetchSmartfloCallRecord(currentRef || undefined, rawPhoneNumber, callStartTimeRef.current);
+      if (hasConnectedRef.current && (secondsRef.current > 0 || (cdr && cdr.answered_seconds > 0))) {
+        await autoLogCallOutcome('connected', cdr, cdr?.answered_seconds || secondsRef.current);
+      } else {
+        await autoLogCallOutcome('rejected', cdr, 0);
+      }
+    }, 1200);
   };
 
   /**
@@ -720,22 +791,16 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
               <div className="flex flex-col items-center justify-center gap-2 pt-1">
                 <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
-                  <span>Waiting for {matchedAgentName} to answer...</span>
+                  <span>Ringing {matchedAgentName}'s mobile...</span>
                 </div>
                 <Button
                   type="button"
                   size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setCallStatus('connected');
-                    hasConnectedRef.current = true;
-                    setStatusMessage(`Connected with ${leadName || 'Ramanuj'}! Recording active 🔴`);
-                    startTimer();
-                  }}
-                  className="h-7 text-[11px] gap-1 bg-emerald-500/10 text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/20 rounded-lg"
+                  onClick={handleAgentAnsweredManually}
+                  className="h-9 px-4 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-xs"
                 >
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  Connect Call Immediately
+                  <CheckCircle2 className="w-4 h-4" />
+                  I've Picked Up — Ring Customer
                 </Button>
               </div>
             </div>
@@ -751,12 +816,23 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
                 <p className="text-xs font-semibold uppercase tracking-wider text-primary">Step 2 of 2: Calling Customer</p>
                 <p className="text-sm font-bold text-foreground mt-0.5">Ringing {maskedCustomer}...</p>
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Tata Smartflo is bridging customer to your call.
+                  Tata Smartflo is bridging customer from Virtual DID <code className="font-mono text-primary font-semibold">{pilotDID}</code>.
                 </p>
               </div>
-              <div className="flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground pt-1">
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
-                <span>Monitoring connection automatically...</span>
+              <div className="flex flex-col items-center justify-center gap-2 pt-1">
+                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+                  <span>Bridging customer call automatically...</span>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleCustomerConnectedManually}
+                  className="h-9 px-4 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-xs"
+                >
+                  <PhoneCall className="w-4 h-4" />
+                  Customer Connected (Live Call)
+                </Button>
               </div>
             </div>
           )}
