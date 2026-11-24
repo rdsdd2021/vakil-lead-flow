@@ -124,6 +124,9 @@ const SAMPLE_RECORDINGS = [
  */
 export function formatPlayableAudioUrl(rawUrl?: string | null): string {
   if (!rawUrl) return '';
+  if (rawUrl.startsWith('/api/recording')) {
+    return rawUrl;
+  }
   if (rawUrl.includes('cloudphone.tatateleservices.com/file/recording')) {
     return `/api/recording?url=${encodeURIComponent(rawUrl)}`;
   }
