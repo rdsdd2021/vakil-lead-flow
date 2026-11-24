@@ -1,7 +1,3 @@
-const SMARTFLO_API_HOST = process.env.SMARTFLO_API_HOST || 'api-smartflo.tatateleservices.com';
-const SMARTFLO_API_TOKEN = process.env.SMARTFLO_API_TOKEN || process.env.VITE_SMARTFLO_JWT_TOKEN || '';
-const SMARTFLO_PILOT_NUMBER = process.env.SMARTFLO_PILOT_NUMBER || process.env.VITE_SMARTFLO_PILOT_NUMBER || '917900000000';
-
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -14,6 +10,10 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+
+  const SMARTFLO_API_HOST = process.env.SMARTFLO_API_HOST || 'api-smartflo.tatateleservices.com';
+  const SMARTFLO_API_TOKEN = process.env.SMARTFLO_API_TOKEN || process.env.VITE_SMARTFLO_JWT_TOKEN || '';
+  const SMARTFLO_PILOT_NUMBER = process.env.SMARTFLO_PILOT_NUMBER || process.env.VITE_SMARTFLO_PILOT_NUMBER || '917965561294';
 
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});

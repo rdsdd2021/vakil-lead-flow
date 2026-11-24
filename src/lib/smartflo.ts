@@ -14,7 +14,7 @@ export interface SmartfloConfig {
 }
 
 export const SMARTFLO_CONFIG: SmartfloConfig = {
-  pilotNumber: import.meta.env.VITE_SMARTFLO_PILOT_NUMBER || '917900000000',
+  pilotNumber: import.meta.env.VITE_SMARTFLO_PILOT_NUMBER || '917965561294',
   defaultAgentPhone: import.meta.env.VITE_SMARTFLO_DEFAULT_AGENT_PHONE || '919800000000',
   apiBaseUrl: import.meta.env.VITE_SMARTFLO_API_BASE_URL || 'https://api-smartflo.tatateleservices.com',
   apiToken: import.meta.env.VITE_SMARTFLO_API_TOKEN || '',
