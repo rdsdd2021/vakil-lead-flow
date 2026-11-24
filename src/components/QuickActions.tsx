@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Phone, MessageCircle, Link2, Calendar as CalendarIcon, ChevronRight, ShieldCheck, MessageSquare } from 'lucide-react';
+import { Phone, MessageCircle, Link2, Calendar as CalendarIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -12,60 +12,7 @@ import { format } from 'date-fns';
 import { ServiceType, SERVICE_LABELS } from '@/types/crm';
 import { useCRM } from '@/contexts/CRMContext';
 import { SmartfloCallDialog } from '@/components/SmartfloCallDialog';
-import { WhatsAppChatDialog } from '@/components/WhatsAppChatDialog';
 import { maskPhoneNumber } from '@/lib/smartflo';
-
-interface WhatsAppTemplate {
-  id: string;
-  label: string;
-  stage: string;
-  getMessage: (name: string, service?: string) => string;
-}
-
-const whatsappTemplates: WhatsAppTemplate[] = [
-  {
-    id: 'intro',
-    label: 'Introduction',
-    stage: 'New Lead',
-    getMessage: (name, service) =>
-      `Hi ${name}, this is Vakiltech. Thank you for reaching out to us regarding ${service || 'your legal query'}. We'd love to help you. Could you share some more details so we can assist you better?`,
-  },
-  {
-    id: 'followup_1',
-    label: 'First Follow-up',
-    stage: 'Follow-up',
-    getMessage: (name, service) =>
-      `Hi ${name}, just following up on your enquiry about ${service || 'legal services'} with Vakiltech. We have expert lawyers ready to assist you. Would you like to schedule a quick call to discuss?`,
-  },
-  {
-    id: 'followup_2',
-    label: 'Gentle Reminder',
-    stage: 'Follow-up',
-    getMessage: (name) =>
-      `Hi ${name}, hope you're doing well! We noticed you were interested in our legal services. Our team is available to help whenever you're ready. Just reply to this message and we'll get back to you right away.`,
-  },
-  {
-    id: 'payment_reminder',
-    label: 'Payment Reminder',
-    stage: 'Payment',
-    getMessage: (name, service) =>
-      `Hi ${name}, thank you for choosing Vakiltech for your ${service || 'legal matter'}. To proceed with your case, kindly complete the advance payment using the link shared earlier. If you have any questions, feel free to ask!`,
-  },
-  {
-    id: 'payment_received',
-    label: 'Payment Confirmation',
-    stage: 'Payment',
-    getMessage: (name, service) =>
-      `Hi ${name}, we've received your advance payment for ${service || 'your case'}. Our lawyer will be assigned shortly and will reach out to you. Thank you for trusting Vakiltech!`,
-  },
-  {
-    id: 'final_reminder',
-    label: 'Final Reminder',
-    stage: 'Last Attempt',
-    getMessage: (name) =>
-      `Hi ${name}, this is a final follow-up from Vakiltech regarding your legal query. We'd hate to see you miss out on expert legal help. If you're still interested, please reply and we'll prioritize your case. Otherwise, feel free to reach out anytime in the future!`,
-  },
-];
 
 interface QuickActionsProps {
   whatsapp_number: string;
@@ -85,10 +32,7 @@ export const QuickActions = ({ whatsapp_number, name, service, leadId, ticketId,
   const [followupTime, setFollowupTime] = useState('09:00');
   const [followupNote, setFollowupNote] = useState('');
   const [popoverOpen, setPopoverOpen] = useState(false);
-  const [waPopoverOpen, setWaPopoverOpen] = useState(false);
   const [callDialogOpen, setCallDialogOpen] = useState(false);
-  const [chatDialogOpen, setChatDialogOpen] = useState(false);
-  const [initialWaMessage, setInitialWaMessage] = useState<string>('');
 
   const serviceLabel = service ? SERVICE_LABELS[service] : undefined;
   const isSuperAdmin = currentRole === 'super_admin';
@@ -101,28 +45,12 @@ export const QuickActions = ({ whatsapp_number, name, service, leadId, ticketId,
     }
   };
 
-  const openWhatsApp = (message: string, isTemplate: boolean = false, templateLabel?: string) => {
+  const handleWhatsAppClick = () => {
+    const cleanNumber = whatsapp_number.replace(/^\+/, '').replace(/\s/g, '').replace(/\D/g, '');
     if (leadId) {
-      addActivityLog(leadId, 'WhatsApp Initiated', isTemplate ? `Selected template "${templateLabel}" for ${maskPhoneNumber(whatsapp_number, isSuperAdmin)}` : `Initiated in-built WhatsApp chat with ${maskPhoneNumber(whatsapp_number, isSuperAdmin)}`);
-    }
-    setInitialWaMessage(message);
-    setChatDialogOpen(true);
-    setWaPopoverOpen(false);
-  };
-
-  const handleWhatsAppDirect = () => {
-    const cleanNumber = whatsapp_number.replace(/^\+/, '').replace(/\s/g, '');
-    if (leadId) {
-      addActivityLog(leadId, 'WhatsApp Initiated', `Opened full WhatsApp Inbox for ${maskPhoneNumber(whatsapp_number, isSuperAdmin)}`);
+      addActivityLog(leadId, 'WhatsApp Initiated', `Opened Inbuilt WhatsApp chat for ${maskPhoneNumber(whatsapp_number, isSuperAdmin)}`);
     }
     navigate(`/inbox?phone=${cleanNumber}`);
-    setWaPopoverOpen(false);
-  };
-
-  const handleWhatsAppTemplate = (template: WhatsAppTemplate) => {
-    openWhatsApp(template.getMessage(name, serviceLabel), true, template.label);
-    setWaPopoverOpen(false);
-    toast.success(`"${template.label}" template opened in WhatsApp`);
   };
 
   const handlePaymentLink = () => {
@@ -150,87 +78,25 @@ export const QuickActions = ({ whatsapp_number, name, service, leadId, ticketId,
     setPopoverOpen(false);
   };
 
-  const whatsappButton = (
-    <Popover open={waPopoverOpen} onOpenChange={setWaPopoverOpen}>
-      <PopoverTrigger asChild>
-        {compact ? (
-          <Button size="icon" variant="ghost" className="h-9 w-9 rounded-xl bg-success/10 text-success hover:bg-success/20" title="WhatsApp Messaging (Kapso AI)">
-            <MessageCircle className="w-4 h-4" />
-          </Button>
-        ) : (
-          <Button className="h-11 rounded-xl bg-success text-success-foreground hover:bg-success/90 flex flex-col gap-0 px-1">
-            <MessageCircle className="w-4 h-4" />
-            <span className="text-[10px]">WhatsApp</span>
-          </Button>
-        )}
-      </PopoverTrigger>
-      <PopoverContent className="w-72 p-0" align="start" side="top">
-        <div className="p-3 pb-2 border-b">
-          <div className="flex items-center justify-between mb-0.5">
-            <p className="text-xs font-semibold">WhatsApp Client Chat</p>
-            <span className="text-[9px] bg-success/20 text-success font-semibold px-1.5 py-0.5 rounded">Kapso AI</span>
-          </div>
-          <p className="text-[10px] text-muted-foreground">Interact directly inside CRM or via web</p>
-        </div>
-
-        <div className="p-2 space-y-1.5">
-          {/* Primary In-CRM Chat Trigger */}
-          <button
-            onClick={() => { setChatDialogOpen(true); setWaPopoverOpen(false); }}
-            className="w-full flex items-center gap-2.5 p-2 rounded-lg bg-success/10 hover:bg-success/20 text-success transition-all text-left border border-success/30 group"
-          >
-            <div className="w-8 h-8 rounded-lg bg-success text-white flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
-              <MessageCircle className="w-4 h-4" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5">
-                <p className="text-xs font-semibold text-foreground">In-CRM Live Chat</p>
-                <span className="text-[9px] px-1 py-0.2 bg-success text-white rounded font-medium">Inbuilt</span>
-              </div>
-              <p className="text-[10px] text-muted-foreground">Interactive chat history & live messaging</p>
-            </div>
-            <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-          </button>
-
-          {/* Full In-CRM WhatsApp Inbox Trigger */}
-          <button
-            onClick={handleWhatsAppDirect}
-            className="w-full flex items-center gap-2.5 p-2 rounded-lg hover:bg-muted/60 transition-colors text-left"
-          >
-            <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-              <MessageSquare className="w-4 h-4" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium">Open Full Inbox</p>
-              <p className="text-[10px] text-muted-foreground">Inbuilt dual-pane WhatsApp screen</p>
-            </div>
-            <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-          </button>
-        </div>
-
-        <div className="border-t px-2 py-2 space-y-0.5 max-h-56 overflow-y-auto">
-          <p className="text-[10px] font-semibold text-muted-foreground px-1 pb-1">Quick Legal Templates</p>
-          {whatsappTemplates.map(template => (
-            <button
-              key={template.id}
-              onClick={() => handleWhatsAppTemplate(template)}
-              className="w-full flex items-center gap-2.5 p-2 rounded-lg hover:bg-muted/60 transition-colors text-left"
-            >
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <p className="text-xs font-medium">{template.label}</p>
-                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">{template.stage}</span>
-                </div>
-                <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">
-                  {template.getMessage(name, serviceLabel)}
-                </p>
-              </div>
-              <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-            </button>
-          ))}
-        </div>
-      </PopoverContent>
-    </Popover>
+  const whatsappButton = compact ? (
+    <Button
+      size="icon"
+      variant="ghost"
+      className="h-9 w-9 rounded-xl bg-success/10 text-success hover:bg-success/20"
+      title="Open in Inbuilt WhatsApp"
+      onClick={handleWhatsAppClick}
+    >
+      <MessageCircle className="w-4 h-4" />
+    </Button>
+  ) : (
+    <Button
+      className="h-11 rounded-xl bg-success text-success-foreground hover:bg-success/90 flex flex-col gap-0 px-1"
+      onClick={handleWhatsAppClick}
+      title="Open in Inbuilt WhatsApp"
+    >
+      <MessageCircle className="w-4 h-4" />
+      <span className="text-[10px]">WhatsApp</span>
+    </Button>
   );
 
   const followupButton = (
@@ -296,19 +162,6 @@ export const QuickActions = ({ whatsapp_number, name, service, leadId, ticketId,
     />
   ) : null;
 
-  const chatDialog = chatDialogOpen ? (
-    <WhatsAppChatDialog
-      open={chatDialogOpen}
-      onOpenChange={setChatDialogOpen}
-      clientName={name}
-      rawPhoneNumber={whatsapp_number}
-      leadId={leadId}
-      ticketId={ticketId}
-      serviceTitle={serviceLabel}
-      initialMessage={initialWaMessage}
-    />
-  ) : null;
-
   if (compact) {
     return (
       <>
@@ -323,7 +176,6 @@ export const QuickActions = ({ whatsapp_number, name, service, leadId, ticketId,
           {followupButton}
         </div>
         {callDialog}
-        {chatDialog}
       </>
     );
   }
@@ -343,7 +195,6 @@ export const QuickActions = ({ whatsapp_number, name, service, leadId, ticketId,
         {followupButton}
       </div>
       {callDialog}
-      {chatDialog}
     </>
   );
 };

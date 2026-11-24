@@ -16,7 +16,6 @@ import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { sendPushNotification } from '@/lib/pushNotifications';
 import { maskPhoneNumber, SMARTFLO_CONFIG } from '@/lib/smartflo';
-import { WhatsAppChatDialog } from '@/components/WhatsAppChatDialog';
 
 const LeadDetail = () => {
   const { id } = useParams();
@@ -33,7 +32,6 @@ const LeadDetail = () => {
   const [advanceAmount, setAdvanceAmount] = useState('');
   const [selectedLawyerId, setSelectedLawyerId] = useState<string>('');
   const [revealPhone, setRevealPhone] = useState(false);
-  const [chatDialogOpen, setChatDialogOpen] = useState(false);
 
 
 
@@ -320,19 +318,22 @@ const LeadDetail = () => {
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <h4 className="text-xs font-semibold text-foreground truncate">WhatsApp Chat</h4>
-                  <span className="text-[9px] bg-success/20 text-success font-semibold px-1.5 py-0.2 rounded">Kapso AI</span>
+                  <h4 className="text-xs font-semibold text-foreground truncate">Inbuilt WhatsApp Chat</h4>
+                  <span className="text-[9px] bg-success/20 text-success font-semibold px-1.5 py-0.2 rounded">Inbuilt</span>
                 </div>
-                <p className="text-[11px] text-muted-foreground truncate">Live two-way messaging with {lead.name}</p>
+                <p className="text-[11px] text-muted-foreground truncate">Live messaging and document transfer with {lead.name}</p>
               </div>
             </div>
             <Button
               size="sm"
               className="h-8 px-3 rounded-lg bg-success hover:bg-success/90 text-success-foreground text-xs gap-1.5 shrink-0 shadow-xs"
-              onClick={() => setChatDialogOpen(true)}
+              onClick={() => {
+                const cleanPhone = lead.whatsapp_number.replace(/\D/g, '');
+                navigate(`/inbox?phone=${cleanPhone}`);
+              }}
             >
               <MessageCircle className="w-3.5 h-3.5" />
-              Open Chat
+              Open Inbuilt WhatsApp
             </Button>
           </div>
         </Card>
@@ -582,16 +583,6 @@ const LeadDetail = () => {
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* In-CRM WhatsApp Chat Dialog */}
-      <WhatsAppChatDialog
-        open={chatDialogOpen}
-        onOpenChange={setChatDialogOpen}
-        leadId={id}
-        clientName={lead.name}
-        rawPhoneNumber={lead.whatsapp_number}
-        serviceTitle={lead.service}
-      />
     </div>
   );
 };

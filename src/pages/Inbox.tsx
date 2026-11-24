@@ -22,7 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { 
   MessageSquare, Send, Check, CheckCheck, Clock, Phone, 
   RotateCw, Sparkles, User, Shield, Search, Filter, 
-  ArrowLeft, ExternalLink, Paperclip, AlertCircle, FileText,
+  ArrowLeft, Paperclip, AlertCircle, FileText,
   UserCheck, ChevronDown, CheckCircle2, Bot, Scale, Hash, MessageCircle
 } from 'lucide-react';
 import { toast } from 'sonner';

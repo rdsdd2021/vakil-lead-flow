@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { 
-  MessageCircle, Send, Check, CheckCheck, Clock, ExternalLink, 
+  MessageCircle, Send, Check, CheckCheck, Clock, 
   RotateCw, Sparkles, Shield, User, Bot, FileText, Scale, Paperclip, AlertCircle
 } from 'lucide-react';
 import { WhatsAppMediaBubble } from '@/components/WhatsAppMediaBubble';

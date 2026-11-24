@@ -13,7 +13,6 @@ import { TICKET_STATUS_LABELS, TicketStatus } from '@/types/crm';
 import { formatDistanceToNow, format } from 'date-fns';
 import { toast } from 'sonner';
 import { sendPushNotification } from '@/lib/pushNotifications';
-import { WhatsAppChatDialog } from '@/components/WhatsAppChatDialog';
 
 type NoteType = 'note' | 'call_log' | 'meeting';
 
@@ -44,7 +43,6 @@ const TicketDetail = () => {
   const [editingDocLink, setEditingDocLink] = useState('');
   const [rejectionNote, setRejectionNote] = useState('');
   const [showRejectForm, setShowRejectForm] = useState(false);
-  const [chatDialogOpen, setChatDialogOpen] = useState(false);
 
   if (isLoadingTickets) {
     return (
@@ -254,8 +252,8 @@ const TicketDetail = () => {
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <h4 className="text-xs font-semibold text-foreground truncate">Case WhatsApp Chat</h4>
-                  <span className="text-[9px] bg-success/20 text-success font-semibold px-1.5 py-0.2 rounded">Kapso AI</span>
+                  <h4 className="text-xs font-semibold text-foreground truncate">Inbuilt Case WhatsApp Chat</h4>
+                  <span className="text-[9px] bg-success/20 text-success font-semibold px-1.5 py-0.2 rounded">Inbuilt</span>
                 </div>
                 <p className="text-[11px] text-muted-foreground truncate">Live client communication for #{ticket.ticket_id}</p>
               </div>
@@ -263,10 +261,18 @@ const TicketDetail = () => {
             <Button
               size="sm"
               className="h-8 px-3 rounded-lg bg-success hover:bg-success/90 text-success-foreground text-xs gap-1.5 shrink-0 shadow-xs"
-              onClick={() => setChatDialogOpen(true)}
+              onClick={() => {
+                const phone = leads.find(l => l.id === ticket.client_id)?.whatsapp_number
+                  || leads.find(l => l.name === ticket.client_name)?.whatsapp_number;
+                if (phone) {
+                  navigate(`/inbox?phone=${phone.replace(/\D/g, '')}`);
+                } else {
+                  navigate('/inbox');
+                }
+              }}
             >
               <MessageCircle className="w-3.5 h-3.5" />
-              Open Chat
+              Open Inbuilt WhatsApp
             </Button>
           </div>
         </Card>
@@ -686,21 +692,6 @@ const TicketDetail = () => {
           )}
         </Card>
       </div>
-
-      {/* In-CRM WhatsApp Chat Dialog */}
-      <WhatsAppChatDialog
-        open={chatDialogOpen}
-        onOpenChange={setChatDialogOpen}
-        leadId={ticket.client_id}
-        ticketId={ticket.ticket_id}
-        clientName={ticket.client_name}
-        rawPhoneNumber={
-          leads.find(l => l.id === ticket.client_id)?.whatsapp_number
-          || leads.find(l => l.name === ticket.client_name)?.whatsapp_number
-          || ''
-        }
-        serviceTitle={ticket.service_type}
-      />
     </div>
   );
 };
