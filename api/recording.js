@@ -119,6 +119,10 @@ export default async function handler(req, res) {
       res.writeHead(206, {
         'Content-Range': `bytes ${start}-${end}/${totalSize}`,
         'Content-Length': chunk.length,
+        'Content-Type': 'audio/mpeg',
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'public, max-age=86400',
+        'Access-Control-Allow-Origin': '*',
       });
       return res.end(chunk);
     }

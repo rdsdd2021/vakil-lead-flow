@@ -29,6 +29,14 @@
       "destination": "/api/webhooks/:match*"
     },
     {
+      "source": "/api/leads/:id",
+      "destination": "/api/leads?id=:id"
+    },
+    {
+      "source": "/api/tickets/:id",
+      "destination": "/api/tickets?id=:id"
+    },
+    {
       "source": "/api/:match*",
       "destination": "/api/:match*"
     },

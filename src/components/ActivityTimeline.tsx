@@ -57,20 +57,32 @@ export const ActivityTimeline = ({ logs }: { logs: ActivityLog[] }) => {
                   <span className="flex items-center gap-1 font-semibold text-foreground">
                     <Play className="w-3 h-3 text-primary fill-primary" /> Audio Recording
                   </span>
-                  <a
-                    href={formatPlayableAudioUrl(log.recording_url)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    download="call-recording.mp3"
-                    className="flex items-center gap-1 text-primary hover:underline font-medium"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Download className="w-3 h-3" /> Download MP3
-                  </a>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={log.recording_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] text-muted-foreground hover:text-primary hover:underline font-medium"
+                      onClick={(e) => e.stopPropagation()}
+                      title="Open direct Tata audio stream"
+                    >
+                      Tata Stream
+                    </a>
+                    <a
+                      href={formatPlayableAudioUrl(log.recording_url)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      download="call-recording.mp3"
+                      className="flex items-center gap-1 text-primary hover:underline font-medium"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Download className="w-3 h-3" /> Download MP3
+                    </a>
+                  </div>
                 </div>
                 <audio
                   controls
-                  preload="metadata"
+                  preload="auto"
                   src={formatPlayableAudioUrl(log.recording_url)}
                   className="w-full h-8 rounded-lg"
                   onClick={(e) => e.stopPropagation()}

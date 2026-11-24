@@ -360,13 +360,13 @@ export const CRMProvider = ({ children }: { children: ReactNode }) => {
     });
     window.dispatchEvent(new Event('vakil_storage_sync'));
 
-    // Asynchronous MySQL Persistence
+    // Asynchronous Persistence
     try {
-      fetch(`${API_BASE_URL}/api/leads/${id}`, {
+      fetch(`${API_BASE_URL}/api/leads?id=${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      }).catch(err => console.warn('[CRM] MySQL background update deferred:', err.message));
+        body: JSON.stringify({ id, ...updates }),
+      }).catch(err => console.warn('[CRM] Background update deferred:', err.message));
     } catch (e) {}
   };
 

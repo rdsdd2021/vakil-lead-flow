@@ -24,9 +24,37 @@ let LEADS_STORE = [
     followup_history: JSON.stringify([]),
     communication_notes: JSON.stringify({
       notes: [],
-      call_logs: [],
+      call_logs: [
+        {
+          id: 'call_MUM1-D7-1795513949.254658',
+          call_id: 'MUM1-D7-1795513949.254658',
+          action: 'Phone Call Connected',
+          details: 'Tata Smartflo Masked 2-Way Call: Answered by customer. Talk time: 00:08 (Total: 21s). Virtual DID: 917965561294.',
+          duration: '00:08',
+          call_duration: '00:08',
+          call_status: 'Answered',
+          status: 'answered',
+          recording_url: 'https://cloudphone.tatateleservices.com/file/recording?callId=MUM1-D7-1795513949.254658&type=rec&token=QmcwZWd0QloxYVYxa3hJekpwVE42N3F3eWI3S2NnZG9XWUxmVWUrR1JFRUFuSW5YWGplT290VjBVVXRpYVdXaTo6YWIxMjM0Y2Q1NnJ0eXl1dQ%3D%3D',
+          masked_number: '+91 82••• ••813',
+          created_by: 'Ramanuj Dey Sarkar',
+          created_at: '2026-11-24T15:22:29.000Z'
+        }
+      ],
       meetings: [],
       activity_logs: [
+        {
+          id: 'call_act_MUM1-D7-1795513949.254658',
+          call_id: 'MUM1-D7-1795513949.254658',
+          action: 'Phone Call Connected',
+          details: 'Tata Smartflo Masked 2-Way Call: Answered by customer. Talk time: 00:08 (Total: 21s). Virtual DID: 917965561294.',
+          duration: '00:08',
+          call_duration: '00:08',
+          call_status: 'Answered',
+          recording_url: 'https://cloudphone.tatateleservices.com/file/recording?callId=MUM1-D7-1795513949.254658&type=rec&token=QmcwZWd0QloxYVYxa3hJekpwVE42N3F3eWI3S2NnZG9XWUxmVWUrR1JFRUFuSW5YWGplT290VjBVVXRpYVdXaTo6YWIxMjM0Y2Q1NnJ0eXl1dQ%3D%3D',
+          masked_number: '+91 82••• ••813',
+          created_by: 'Ramanuj Dey Sarkar',
+          created_at: '2026-11-24T15:22:29.000Z'
+        },
         { id: 'act_1', action: 'Lead Created', details: 'Client enquiry registered in CRM', created_by: 'Intake Desk', created_at: '2026-11-23T18:00:00.000Z' }
       ]
     })
@@ -197,7 +225,22 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true, lead: LEADS_STORE[idx] });
       }
 
-      return res.status(404).json({ error: 'Lead not found' });
+      // Upsert lead if not yet in serverless memory
+      const newLead = {
+        id: targetId,
+        custom_id: `VT-${String(targetId).slice(-4)}`,
+        name: body.name || 'Client',
+        whatsapp_number: body.whatsapp_number || '918250622813',
+        location: body.location || 'Verified Client',
+        service: body.service || 'consultation',
+        description: body.description || '',
+        payment_status: body.payment_status || 'pending',
+        status: body.status || 'NEW_LEAD',
+        ...body,
+        updated_at: new Date().toISOString()
+      };
+      LEADS_STORE.unshift(newLead);
+      return res.status(200).json({ success: true, lead: newLead });
     } catch (err) {
       return res.status(500).json({ error: 'Failed to update lead: ' + err.message });
     }

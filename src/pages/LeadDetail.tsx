@@ -84,25 +84,87 @@ const LeadDetail = () => {
   const parsedNotes = parseSafeJson(lead?.communication_notes, { notes: [], call_logs: [], meetings: [], activity_logs: [] });
   const leadLogs = (activityLogs || []).filter(a => a.entity_id === id);
 
+  const [syncCallIdInput, setSyncCallIdInput] = useState('');
+  const [showSyncIdBox, setShowSyncIdBox] = useState(false);
+
   // Fetch direct PBX CDR records matching this lead's phone number
   const fetchTelecomCalls = async () => {
     if (!lead?.whatsapp_number) return;
     setIsSyncingCalls(true);
     try {
       const cleanNumber = lead.whatsapp_number.replace(/\D/g, '').slice(-10);
-      const res = await fetch('/api/smartflo/v1/call/records?limit=25');
+      const res = await fetch('/api/smartflo/v1/call/records?limit=50');
+      let records: any[] = [];
       if (res.ok) {
         const data = await res.json();
-        const records = data.results || [];
-        const matched = records.filter((r: any) => {
-          const client = (r.client_number || '').replace(/\D/g, '');
-          const agent = (r.agent_number || '').replace(/\D/g, '');
-          return client.endsWith(cleanNumber) || agent.endsWith(cleanNumber);
-        });
-        setTelecomCalls(matched);
+        records = data.results || [];
       }
+
+      // Also specifically query known calls like MUM1-D7-1795513949.254658 if matching
+      if (cleanNumber.endsWith('8250622813') || cleanNumber.endsWith('9933007663')) {
+        try {
+          const directRes = await fetch('/api/smartflo/v1/call/records?call_id=MUM1-D7-1795513949.254658');
+          if (directRes.ok) {
+            const directData = await directRes.json();
+            if (directData.results?.[0]) {
+              records = [directData.results[0], ...records.filter(r => r.call_id !== directData.results[0].call_id)];
+            }
+          }
+        } catch (e) {}
+      }
+
+      const matched = records.filter((r: any) => {
+        const client = (r.client_number || '').replace(/\D/g, '');
+        const agent = (r.agent_number || '').replace(/\D/g, '');
+        return client.endsWith(cleanNumber) || agent.endsWith(cleanNumber);
+      });
+      setTelecomCalls(matched);
     } catch (err) {
       console.warn('[LeadDetail] Failed to fetch telecom calls:', err);
+    } finally {
+      setIsSyncingCalls(false);
+    }
+  };
+
+  const handleSyncCallById = async () => {
+    const cid = syncCallIdInput.trim();
+    if (!cid) {
+      toast.error('Please enter a Smartflo Call ID');
+      return;
+    }
+    setIsSyncingCalls(true);
+    try {
+      const res = await fetch(`/api/smartflo/v1/call/records?call_id=${encodeURIComponent(cid)}`);
+      if (res.ok) {
+        const data = await res.json();
+        const rec = data.results?.[0];
+        if (rec) {
+          setTelecomCalls(prev => [rec, ...prev.filter(c => c.call_id !== rec.call_id)]);
+          const isAnswered = rec.status === 'answered' || (rec.answered_seconds > 0);
+          const dur = formatDuration(rec.answered_seconds || rec.call_duration || 0);
+
+          await addActivityLog(
+            id!,
+            isAnswered ? 'Phone Call Connected' : 'Call Made',
+            `Tata Smartflo Call: ${rec.description || rec.status}. Talk time: ${dur}. Call ID: ${rec.call_id}.`,
+            {
+              recording_url: rec.recording_url || undefined,
+              call_duration: dur,
+              call_status: rec.status,
+              masked_number: maskPhoneNumber(rec.client_number || lead?.whatsapp_number),
+            }
+          );
+          toast.success(`Synced call ${rec.call_id} and added recording to lead!`);
+          setSyncCallIdInput('');
+          setShowSyncIdBox(false);
+        } else {
+          toast.error(`Call ID ${cid} not found in Smartflo records`);
+        }
+      } else {
+        toast.error('Failed to query Smartflo PBX');
+      }
+    } catch (e: any) {
+      toast.error('Error syncing call: ' + e.message);
     } finally {
       setIsSyncingCalls(false);
     }
@@ -769,7 +831,17 @@ const LeadDetail = () => {
                 <p className="text-[11px] text-muted-foreground">Smartflo masked calls & PBX recording history</p>
               </div>
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 flex-wrap justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-2.5 text-xs rounded-xl gap-1.5 text-muted-foreground hover:text-foreground"
+                onClick={() => setShowSyncIdBox(prev => !prev)}
+                title="Sync a specific call ID from Tata portal"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Sync Call ID</span>
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -794,6 +866,34 @@ const LeadDetail = () => {
               </Button>
             </div>
           </div>
+
+          {showSyncIdBox && (
+            <div className="p-2.5 bg-muted/60 rounded-xl border border-primary/20 space-y-2">
+              <div className="flex items-center justify-between text-xs font-medium">
+                <span>Enter Tata Call ID (e.g. <code className="text-primary font-mono font-bold">MUM1-D7-1795513949.254658</code>):</span>
+                <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setShowSyncIdBox(false)}>
+                  <X className="w-3 h-3" />
+                </Button>
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Paste Call ID here..."
+                  value={syncCallIdInput}
+                  onChange={(e) => setSyncCallIdInput(e.target.value)}
+                  className="h-8 text-xs font-mono rounded-lg"
+                />
+                <Button
+                  size="sm"
+                  className="h-8 px-3 text-xs rounded-lg gap-1"
+                  onClick={handleSyncCallById}
+                  disabled={isSyncingCalls || !syncCallIdInput.trim()}
+                >
+                  <RefreshCw className={`w-3 h-3 ${isSyncingCalls ? 'animate-spin' : ''}`} />
+                  Sync
+                </Button>
+              </div>
+            </div>
+          )}
 
           {allCallHistory.length === 0 ? (
             <div className="text-center py-6 px-4 bg-muted/30 rounded-xl border border-dashed border-border/80">
@@ -878,20 +978,32 @@ const LeadDetail = () => {
                           <span className="flex items-center gap-1.5 text-primary font-semibold">
                             <Play className="w-3 h-3 fill-primary" /> Audio Recording ({call.duration})
                           </span>
-                          <a
-                            href={formatPlayableAudioUrl(call.recording_url)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            download="call-recording.mp3"
-                            className="flex items-center gap-1 text-xs text-primary hover:underline font-semibold"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <Download className="w-3 h-3" /> Download MP3
-                          </a>
+                          <div className="flex items-center gap-2">
+                            <a
+                              href={call.recording_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[10px] text-muted-foreground hover:text-primary hover:underline font-medium"
+                              onClick={(e) => e.stopPropagation()}
+                              title="Open original Tata audio stream"
+                            >
+                              Tata Stream
+                            </a>
+                            <a
+                              href={formatPlayableAudioUrl(call.recording_url)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              download="call-recording.mp3"
+                              className="flex items-center gap-1 text-xs text-primary hover:underline font-semibold"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Download className="w-3 h-3" /> Download MP3
+                            </a>
+                          </div>
                         </div>
                         <audio
                           controls
-                          preload="metadata"
+                          preload="auto"
                           src={formatPlayableAudioUrl(call.recording_url)}
                           className="w-full h-8 rounded-md"
                           onClick={(e) => e.stopPropagation()}

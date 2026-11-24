@@ -38,7 +38,19 @@ export default async function handler(req, res) {
 
     if (action === 'records' || req.url.includes('records')) {
       try {
-        const tataRes = await fetch(`https://${SMARTFLO_API_HOST}/v1/call/records?limit=${limit}`, {
+        const queryParams = new URLSearchParams();
+        if (req.query) {
+          for (const [key, val] of Object.entries(req.query)) {
+            if (key !== 'action' && val !== undefined && val !== null && val !== '') {
+              queryParams.set(key, String(val));
+            }
+          }
+        }
+        if (!queryParams.has('limit')) {
+          queryParams.set('limit', limit || '25');
+        }
+
+        const tataRes = await fetch(`https://${SMARTFLO_API_HOST}/v1/call/records?${queryParams.toString()}`, {
           headers: {
             'Authorization': `Bearer ${SMARTFLO_API_TOKEN}`,
             'Accept': 'application/json',
