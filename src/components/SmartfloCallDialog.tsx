@@ -655,6 +655,53 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
             </div>
           )}
 
+          {/* INITIATING: Contacting Tata PBX */}
+          {callStatus === 'initiating' && (
+            <div className="text-center py-6 bg-card rounded-xl border border-primary/20 bg-primary/5 space-y-3 animate-in fade-in">
+              <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto">
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-foreground">Initiating Call via Tata Smartflo...</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Routing via Virtual DID <code className="font-mono font-semibold text-primary">{pilotDID}</code>
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* FAILED: Call initiation failed */}
+          {callStatus === 'failed' && (
+            <div className="space-y-3 animate-in fade-in">
+              <div className="text-center py-5 bg-destructive/10 rounded-xl border border-destructive/30 space-y-2">
+                <div className="w-12 h-12 rounded-full bg-destructive/20 text-destructive flex items-center justify-center mx-auto">
+                  <AlertTriangle className="w-6 h-6" />
+                </div>
+                <div>
+                  <Badge variant="destructive" className="text-[10px] uppercase font-bold tracking-wider">
+                    Call Failed
+                  </Badge>
+                  <p className="text-sm font-bold text-foreground mt-1.5 px-2">
+                    {errorMessage || statusMessage || 'Could not initiate call via Tata Smartflo.'}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Please verify that your agent phone and customer number are active 10-digit Indian numbers.
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                className="w-full h-10 rounded-xl text-xs gap-1.5 font-medium"
+                onClick={() => {
+                  setCallStatus('idle');
+                  setErrorMessage(null);
+                }}
+              >
+                <RotateCcw className="w-3.5 h-3.5" /> Try Again / Change Details
+              </Button>
+            </div>
+          )}
+
           {/* STEP 1: Ringing Agent Phone */}
           {callStatus === 'ringing_agent' && (
             <div className="text-center py-5 bg-card rounded-xl border border-warning/30 bg-warning/5 space-y-2.5 animate-in fade-in">

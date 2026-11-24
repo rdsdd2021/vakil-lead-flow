@@ -1,6 +1,18 @@
 {
   "rewrites": [
     {
+      "source": "/api/smartflo/v1/live_calls",
+      "destination": "/api/smartflo/v1/click_to_call?action=live_calls"
+    },
+    {
+      "source": "/api/smartflo/v1/call/records",
+      "destination": "/api/smartflo/v1/click_to_call?action=records"
+    },
+    {
+      "source": "/api/smartflo/v1/call/hangup",
+      "destination": "/api/smartflo/v1/click_to_call?action=hangup"
+    },
+    {
       "source": "/webhooks/smartflo/dialplan",
       "destination": "/api/dialplan"
     },

@@ -89,6 +89,7 @@ export interface SmartfloCallResult {
   recordingUrl?: string;
   status: SmartfloCallStatus;
   message?: string;
+  simulated?: boolean;
 }
 
 export interface SmartfloCallRecord {
@@ -142,59 +143,74 @@ export async function initiateSmartfloCall(
 ): Promise<SmartfloCallResult> {
   const { leadId, agentId, customerNumber, agentPhoneOrExt } = params;
 
-  const cleanDestination = customerNumber.replace(/^\+/, '').replace(/\s/g, '');
-  const cleanCallerId = (params.callerId || getSmartfloDID()).replace(/^\+/, '').replace(/\s/g, '');
-  const cleanAgentNumber = (agentPhoneOrExt || SMARTFLO_CONFIG.defaultAgentPhone || '919800000000').replace(/^\+/, '').replace(/\s/g, '');
+  const cleanDestination = customerNumber.replace(/^\+/, '').replace(/\s/g, '').replace(/\D/g, '');
+  const cleanCallerId = (params.callerId || getSmartfloDID()).replace(/^\+/, '').replace(/\s/g, '').replace(/\D/g, '');
+  const cleanAgentNumber = (agentPhoneOrExt || SMARTFLO_CONFIG.defaultAgentPhone || '9800000001').replace(/^\+/, '').replace(/\s/g, '').replace(/\D/g, '');
 
   if (!forceSimulation) {
     onStateChange?.('initiating', `Triggering live call via Tata Smartflo (DID: ${cleanCallerId})...`);
 
-    // 1. Direct call to Tata Smartflo (or via local Vite proxy)
-    const endpoints = [
-      '/api/smartflo/v1/click_to_call',
-      'https://api-smartflo.tatateleservices.com/v1/click_to_call',
-    ];
-
-    for (const endpoint of endpoints) {
-      try {
-        const directRes = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${SMARTFLO_CONFIG.apiToken}`,
+    try {
+      const directRes = await fetch('/api/smartflo/v1/click_to_call', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SMARTFLO_CONFIG.apiToken}`,
+        },
+        body: JSON.stringify({
+          agent_number: cleanAgentNumber,
+          destination_number: cleanDestination,
+          caller_id: cleanCallerId,
+          async: 1,
+          custom_identifier: {
+            lead_id: leadId,
+            agent_id: agentId,
           },
-          body: JSON.stringify({
-            agent_number: cleanAgentNumber,
-            destination_number: cleanDestination,
-            caller_id: cleanCallerId,
-            async: 1,
-            custom_identifier: {
-              lead_id: leadId,
-              agent_id: agentId,
-            },
-          }),
-        });
+        }),
+      });
 
-        if (directRes.ok) {
-          const data = await directRes.json();
-          const refId = data.ref_id || data.call_id || '';
-          onStateChange?.('ringing_agent', `Calling your phone (${cleanAgentNumber}) from ${cleanCallerId}. Pick up to connect!`);
-          return {
-            success: true,
-            refId: refId,
-            callId: data.call_id || refId || `tata_${Date.now()}`,
-            durationSeconds: 0,
-            status: 'ringing_agent',
-            message: `Call placed! Tata Smartflo is ringing your phone (${cleanAgentNumber}) right now.`,
-          };
-        }
-      } catch (err: any) {
-        console.warn(`Attempt on ${endpoint} failed:`, err);
+      const data = await directRes.json().catch(() => ({}));
+
+      if (directRes.ok && data.success) {
+        const refId = data.ref_id || data.call_id || '';
+        onStateChange?.('ringing_agent', `Calling your phone (${cleanAgentNumber}) from ${cleanCallerId}. Pick up to connect!`);
+        return {
+          success: true,
+          refId: refId,
+          callId: data.call_id || refId || `tata_${Date.now()}`,
+          durationSeconds: 0,
+          status: 'ringing_agent',
+          message: data.message || `Call placed! Tata Smartflo is ringing your phone (${cleanAgentNumber}) right now.`,
+          simulated: false,
+        };
+      } else {
+        const errMsg = data.error || data.message || 'Call request rejected by Tata Smartflo';
+        onStateChange?.('failed', errMsg);
+        return {
+          success: false,
+          refId: '',
+          callId: '',
+          durationSeconds: 0,
+          status: 'failed',
+          message: errMsg,
+        };
       }
+    } catch (err: any) {
+      console.warn('Call request failed:', err);
+      const errMsg = err?.message || 'Network error connecting to Tata Smartflo';
+      onStateChange?.('failed', errMsg);
+      return {
+        success: false,
+        refId: '',
+        callId: '',
+        durationSeconds: 0,
+        status: 'failed',
+        message: errMsg,
+      };
     }
   }
 
-  // Fallback / simulation mode
+  // Fallback / simulation mode ONLY if explicitly requested
   onStateChange?.('ringing_agent', `Simulation Mode: Ringing agent from DID ${SMARTFLO_CONFIG.pilotNumber}...`);
 
   return new Promise((resolve) => {
@@ -212,6 +228,7 @@ export async function initiateSmartfloCall(
           recordingUrl: SAMPLE_RECORDINGS[Math.floor(Math.random() * SAMPLE_RECORDINGS.length)],
           status: 'connected',
           message: 'Call simulated via Tata Smartflo test bridge',
+          simulated: true,
         });
       }, 1500);
     }, 1200);
@@ -222,12 +239,11 @@ export async function initiateSmartfloCall(
  * Checks for live active calls on Tata Smartflo.
  */
 export async function fetchSmartfloLiveCalls(agentNumber?: string): Promise<any[]> {
-  const query = agentNumber ? `?agent_number=${agentNumber.replace(/^\+/, '').replace(/\s/g, '').replace(/\D/g, '')}` : '';
+  const cleanAgent = agentNumber ? agentNumber.replace(/^\+/, '').replace(/\s/g, '').replace(/\D/g, '') : '';
+  const query = cleanAgent ? `?agent_number=${cleanAgent}` : '';
   const endpoints = [
     `/api/smartflo/v1/live_calls${query}`,
-    `/api/smartflo/v1/live_calls`,
-    `https://api-smartflo.tatateleservices.com/v1/live_calls${query}`,
-    `https://api-smartflo.tatateleservices.com/v1/live_calls`,
+    `/api/smartflo/v1/click_to_call?action=live_calls${cleanAgent ? `&agent_number=${cleanAgent}` : ''}`,
   ];
 
   for (const ep of endpoints) {
@@ -262,7 +278,7 @@ export async function fetchSmartfloCallRecord(
 ): Promise<SmartfloCallRecord | null> {
   const endpoints = [
     '/api/smartflo/v1/call/records?direction=outbound&limit=10',
-    'https://api-smartflo.tatateleservices.com/v1/call/records?direction=outbound&limit=10',
+    '/api/smartflo/v1/click_to_call?action=records&direction=outbound&limit=10',
   ];
 
   const cleanClient = clientNumber ? clientNumber.replace(/^\+/, '').replace(/\s/g, '').replace(/\D/g, '').slice(-10) : '';
@@ -316,6 +332,7 @@ export async function fetchSmartfloCallRecord(
 export async function hangupSmartfloCall(refIdOrCallId: string): Promise<boolean> {
   const endpoints = [
     '/api/smartflo/v1/call/hangup',
+    '/api/smartflo/v1/click_to_call?action=hangup',
     'https://api-smartflo.tatateleservices.com/v1/call/hangup',
   ];
 

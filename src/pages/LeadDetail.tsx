@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCRM } from '@/contexts/CRMContext';
 import { QuickActions } from '@/components/QuickActions';
@@ -47,15 +47,26 @@ const LeadDetail = () => {
       return fallback;
     }
   };
+
+  const formatSafeDate = (d?: any, fallback = 'Recently') => {
+    if (!d) return fallback;
+    try {
+      const dt = new Date(d);
+      if (isNaN(dt.getTime())) return fallback;
+      return format(dt, 'dd MMM yyyy, hh:mm a');
+    } catch {
+      return fallback;
+    }
+  };
   
   const parsedNotes = parseSafeJson(lead?.communication_notes, { notes: [], call_logs: [], meetings: [], activity_logs: [] });
   const leadNotes = Array.isArray(parsedNotes.notes) ? parsedNotes.notes : [];
-  const leadLogs = activityLogs.filter(a => a.entity_id === id);
+  const leadLogs = (activityLogs || []).filter(a => a.entity_id === id);
 
   const servicePrice = (lead && SERVICE_PRICES[lead.service as ServiceType]) ? SERVICE_PRICES[lead.service as ServiceType] : 999;
 
   // Direct serverless API fallback if navigated directly to lead URL
-  useState(() => {
+  useEffect(() => {
     if (!lead && id) {
       fetch(`/api/leads?id=${id}`)
         .then(res => res.ok ? res.json() : null)
@@ -66,7 +77,7 @@ const LeadDetail = () => {
         })
         .catch(err => console.warn('[LeadDetail] Direct fetch note:', err));
     }
-  });
+  }, [id, lead, setLeads]);
 
   if (isLoadingLeads) {
     return (
@@ -213,7 +224,7 @@ const LeadDetail = () => {
       sendPushNotification({
         target: lawyer.id,
         title: '🎉 New Ticket Assigned to You',
-        body: `${lead.name} · ${lead.service.replace(/-/g, ' ')} · ₹${amount.toLocaleString('en-IN')} advance paid`,
+        body: `${lead.name} · ${(lead.service || '').replace(/-/g, ' ')} · ₹${amount.toLocaleString('en-IN')} advance paid`,
         url: '/tickets',
         tag: `ticket-assign-${ticketId}`,
       });
@@ -328,7 +339,7 @@ const LeadDetail = () => {
               size="sm"
               className="h-8 px-3 rounded-lg bg-success hover:bg-success/90 text-success-foreground text-xs gap-1.5 shrink-0 shadow-xs"
               onClick={() => {
-                const cleanPhone = lead.whatsapp_number.replace(/\D/g, '');
+                const cleanPhone = (lead.whatsapp_number || '').replace(/\D/g, '');
                 navigate(`/inbox?phone=${cleanPhone}`);
               }}
             >
@@ -350,14 +361,14 @@ const LeadDetail = () => {
           </div>
           <div className="grid grid-cols-1 gap-2 text-xs">
             <div className="flex items-center gap-2 text-muted-foreground">
-              <MapPin className="w-4 h-4 shrink-0" /><span>{lead.location}</span>
+              <MapPin className="w-4 h-4 shrink-0" /><span>{lead.location || 'Not Specified'}</span>
             </div>
             <div className="flex items-center justify-between text-muted-foreground">
               <div className="flex items-center gap-2">
                 <Phone className="w-4 h-4 shrink-0 text-success" />
                 <span className="font-mono">
                   {revealPhone && currentRole === 'super_admin'
-                    ? `+${lead.whatsapp_number.replace(/^\+/, '')}`
+                    ? `+${(lead.whatsapp_number || '').replace(/^\+/, '')}`
                     : maskPhoneNumber(lead.whatsapp_number, false)}
                 </span>
                 <span className="text-[10px] text-primary/80 font-medium bg-primary/10 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
@@ -383,10 +394,10 @@ const LeadDetail = () => {
               })()}/6</span>
             </div>
             <div className="flex items-center gap-2 text-muted-foreground">
-              <Clock className="w-4 h-4 shrink-0" /><span>Created: {format(new Date(lead.created_at), 'dd MMM yyyy, hh:mm a')}</span>
+              <Clock className="w-4 h-4 shrink-0" /><span>Created: {formatSafeDate(lead.created_at)}</span>
             </div>
             <div className="flex items-center gap-2 text-muted-foreground">
-              <Clock className="w-4 h-4 shrink-0" /><span>Updated: {format(new Date(lead.updated_at), 'dd MMM yyyy, hh:mm a')}</span>
+              <Clock className="w-4 h-4 shrink-0" /><span>Updated: {formatSafeDate(lead.updated_at)}</span>
             </div>
           </div>
           {lead.description && (
@@ -511,7 +522,7 @@ const LeadDetail = () => {
                         <Pencil className="w-3 h-3 text-muted-foreground" />
                       </Button>
                     </div>
-                    <p className="text-[10px] text-muted-foreground mt-1">{note.created_by} • {format(new Date(note.created_at), 'dd MMM yyyy, hh:mm a')}</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">{note.created_by} • {formatSafeDate(note.created_at)}</p>
                   </>
                 )}
               </div>
@@ -532,7 +543,7 @@ const LeadDetail = () => {
           <DialogHeader>
             <DialogTitle className="text-base">Record Advance Payment</DialogTitle>
             <DialogDescription className="text-xs">
-              Enter the advance amount paid by <span className="font-semibold text-foreground">{lead.name}</span> for {lead.service.replace('-', ' ')}.
+              Enter the advance amount paid by <span className="font-semibold text-foreground">{lead.name}</span> for {(lead.service || '').replace(/-/g, ' ')}.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 pt-2">
