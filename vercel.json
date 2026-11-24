@@ -1,6 +1,18 @@
 {
   "rewrites": [
     {
+      "source": "/webhooks/smartflo/dialplan",
+      "destination": "/api/dialplan"
+    },
+    {
+      "source": "/api/webhooks/smartflo/dialplan",
+      "destination": "/api/dialplan"
+    },
+    {
+      "source": "/api/whatsapp/upload",
+      "destination": "/api/whatsapp/media"
+    },
+    {
       "source": "/webhooks/:match*",
       "destination": "/api/webhooks/:match*"
     },
