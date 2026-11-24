@@ -13,11 +13,29 @@ export interface SmartfloConfig {
   enableNumberMasking: boolean;
 }
 
+export function getSmartfloDID(): string {
+  if (typeof window !== 'undefined') {
+    const custom = localStorage.getItem('smartflo_custom_did');
+    if (custom && custom.trim()) {
+      return custom.trim();
+    }
+  }
+  return import.meta.env.VITE_SMARTFLO_PILOT_NUMBER || '917965561294';
+}
+
+export function setSmartfloDID(newDid: string): void {
+  const clean = newDid.replace(/^\+/, '').replace(/\s/g, '');
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('smartflo_custom_did', clean);
+  }
+  SMARTFLO_CONFIG.pilotNumber = clean;
+}
+
 export const SMARTFLO_CONFIG: SmartfloConfig = {
-  pilotNumber: import.meta.env.VITE_SMARTFLO_PILOT_NUMBER || '917965561294',
-  defaultAgentPhone: import.meta.env.VITE_SMARTFLO_DEFAULT_AGENT_PHONE || '919800000000',
+  pilotNumber: getSmartfloDID(),
+  defaultAgentPhone: import.meta.env.VITE_SMARTFLO_DEFAULT_AGENT_PHONE || '9800000001',
   apiBaseUrl: import.meta.env.VITE_SMARTFLO_API_BASE_URL || 'https://api-smartflo.tatateleservices.com',
-  apiToken: import.meta.env.VITE_SMARTFLO_API_TOKEN || '',
+  apiToken: import.meta.env.VITE_SMARTFLO_JWT_TOKEN || import.meta.env.VITE_SMARTFLO_API_TOKEN || '',
   enableNumberMasking: true,
 };
 
@@ -60,6 +78,7 @@ export interface SmartfloCallInitiateParams {
   agentPhoneOrExt?: string;
   customerNumber: string;
   serviceName?: string;
+  callerId?: string;
 }
 
 export interface SmartfloCallResult {
@@ -124,7 +143,7 @@ export async function initiateSmartfloCall(
   const { leadId, agentId, customerNumber, agentPhoneOrExt } = params;
 
   const cleanDestination = customerNumber.replace(/^\+/, '').replace(/\s/g, '');
-  const cleanCallerId = SMARTFLO_CONFIG.pilotNumber.replace(/^\+/, '').replace(/\s/g, '');
+  const cleanCallerId = (params.callerId || getSmartfloDID()).replace(/^\+/, '').replace(/\s/g, '');
   const cleanAgentNumber = (agentPhoneOrExt || SMARTFLO_CONFIG.defaultAgentPhone || '919800000000').replace(/^\+/, '').replace(/\s/g, '');
 
   if (!forceSimulation) {

@@ -17,7 +17,7 @@ const https = require('https');
 
 const SMARTFLO_API_HOST = process.env.SMARTFLO_API_HOST || 'api-smartflo.tatateleservices.com';
 const SMARTFLO_API_TOKEN = process.env.SMARTFLO_API_TOKEN || '';
-const SMARTFLO_PILOT_NUMBER = process.env.SMARTFLO_PILOT_NUMBER || '917900000000'; // Virtual DID Placeholder
+const SMARTFLO_PILOT_NUMBER = process.env.SMARTFLO_PILOT_NUMBER || '917965561294';
 
 exports.handler = async (event) => {
   try {

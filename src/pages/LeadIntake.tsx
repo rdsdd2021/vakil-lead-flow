@@ -13,7 +13,7 @@ import {
   Scale, Calendar, MessageCircle
 } from 'lucide-react';
 import { SERVICE_LABELS, ServiceType } from '@/types/crm';
-import { SMARTFLO_CONFIG } from '@/lib/smartflo';
+import { SMARTFLO_CONFIG, getSmartfloDID } from '@/lib/smartflo';
 import { sendWhatsAppMessageApi } from '@/lib/kapso';
 import vakiltechLogo from '@/assets/vakiltech-logo.png';
 import { toast } from 'sonner';
@@ -321,7 +321,7 @@ export default function LeadIntake() {
               <Phone className="w-4 h-4 text-primary shrink-0 mt-0.5" />
               <div className="text-[11px] text-muted-foreground leading-relaxed">
                 <span className="font-semibold text-foreground block mb-0.5">Tata Smartflo Telephony Enabled</span>
-                When legal counsel calls this client, the call will bridge via Virtual DID <code className="font-mono font-semibold text-primary">{SMARTFLO_CONFIG.pilotNumber}</code> with automatic call recording and timeline logging.
+                When legal counsel calls this client, the call will bridge via Virtual DID <code className="font-mono font-semibold text-primary">{getSmartfloDID()}</code> with automatic call recording and timeline logging.
               </div>
             </div>
 

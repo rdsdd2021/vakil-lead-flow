@@ -14,7 +14,9 @@ import {
   SMARTFLO_CONFIG, 
   simulateSmartfloInboundDialplan, 
   AGENT_PHONE_DIRECTORY,
-  maskPhoneNumber 
+  maskPhoneNumber,
+  getSmartfloDID,
+  setSmartfloDID
 } from '@/lib/smartflo';
 import { toast } from 'sonner';
 
@@ -23,8 +25,23 @@ export const SmartfloDialplanSettings: React.FC<{ triggerButton?: React.ReactNod
   const [testNumber, setTestNumber] = useState('');
   const [testResult, setTestResult] = useState<any>(null);
   const [copied, setCopied] = useState(false);
+  const [pilotDID, setPilotDID] = useState<string>(() => getSmartfloDID());
+  const [didInput, setDidInput] = useState<string>(() => getSmartfloDID());
+  const [isEditingDID, setIsEditingDID] = useState(false);
 
   const isSuperAdmin = currentRole === 'super_admin';
+
+  const handleSaveDID = () => {
+    const clean = didInput.replace(/^\+/, '').replace(/\s/g, '').replace(/\D/g, '');
+    if (!clean || clean.length < 10) {
+      toast.error('Please enter a valid 10 to 12 digit Tata Virtual DID');
+      return;
+    }
+    setSmartfloDID(clean);
+    setPilotDID(clean);
+    setIsEditingDID(false);
+    toast.success(`Virtual DID updated to ${clean}`);
+  };
 
   // The Webhook URL to configure in Tata Smartflo Portal
   const webhookUrl = 'https://vakil-lead-flow-main.vercel.app/api/dialplan';
@@ -71,9 +88,50 @@ export const SmartfloDialplanSettings: React.FC<{ triggerButton?: React.ReactNod
             Dynamic Lead Ownership Routing
           </DialogTitle>
           <DialogDescription className="text-xs">
-            When a customer dials Virtual DID <code className="font-mono font-semibold text-foreground">{SMARTFLO_CONFIG.pilotNumber}</code>, Tata Smartflo checks your CRM database and dynamically forwards the call directly to the agent who owns that lead.
+            When a customer dials Virtual DID <code className="font-mono font-semibold text-foreground">{pilotDID}</code>, Tata Smartflo checks your CRM database and dynamically forwards the call directly to the agent who owns that lead.
           </DialogDescription>
         </DialogHeader>
+
+        {/* Virtual DID Quick Manager */}
+        <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 my-2 text-xs space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="font-semibold text-foreground flex items-center gap-1.5">
+              <span>Active Virtual DID (Pilot Number):</span>
+            </span>
+            <div className="flex items-center gap-2">
+              <code className="font-mono font-bold text-primary text-sm">{pilotDID}</code>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsEditingDID(!isEditingDID)}
+                className="h-6 px-2 text-[11px] text-primary"
+              >
+                {isEditingDID ? 'Cancel' : 'Edit DID'}
+              </Button>
+            </div>
+          </div>
+          {isEditingDID && (
+            <div className="pt-2 border-t border-primary/20 space-y-1.5">
+              <label className="text-[11px] text-muted-foreground block">
+                Update Tata Tele Virtual Pilot DID:
+              </label>
+              <div className="flex gap-2">
+                <Input
+                  value={didInput}
+                  onChange={(e) => setDidInput(e.target.value)}
+                  placeholder="e.g. 917965561294"
+                  className="h-8 text-xs font-mono rounded-lg bg-background"
+                />
+                <Button size="sm" className="h-8 text-xs px-3" onClick={handleSaveDID}>
+                  Save DID
+                </Button>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Saved to browser storage & immediately applies to all inbound & outbound routes.
+              </p>
+            </div>
+          )}
+        </div>
 
         <Tabs defaultValue="simulator" className="mt-3">
           <TabsList className="grid grid-cols-3 h-10 p-1 bg-muted/60 rounded-xl">
@@ -211,7 +269,7 @@ export const SmartfloDialplanSettings: React.FC<{ triggerButton?: React.ReactNod
               <ol className="list-decimal list-inside space-y-1.5 text-muted-foreground leading-relaxed">
                 <li>Log in to <strong className="text-foreground">https://cloudphone.tatateleservices.com</strong></li>
                 <li>Go to <strong className="text-foreground">Inbound Services &gt; Inbound Routing / DIDs</strong></li>
-                <li>Click <strong>Edit</strong> on Virtual DID <strong className="text-foreground font-mono">{SMARTFLO_CONFIG.pilotNumber}</strong></li>
+                <li>Click <strong>Edit</strong> on Virtual DID <strong className="text-foreground font-mono">{pilotDID}</strong></li>
                 <li>Set Destination Type to <strong className="text-foreground">API Dialplan</strong> (or Inbound Webhook)</li>
                 <li>Paste your Webhook URL: <code className="text-primary font-mono">{webhookUrl}</code></li>
                 <li>Set Failover Destination to <strong className="text-foreground">Reception / General Queue</strong> (for busy/unanswered calls)</li>

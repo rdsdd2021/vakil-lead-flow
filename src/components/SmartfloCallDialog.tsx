@@ -18,7 +18,9 @@ import {
   fetchSmartfloLiveCalls, 
   fetchSmartfloCallRecord, 
   hangupSmartfloCall,
-  formatPlayableAudioUrl
+  formatPlayableAudioUrl,
+  getSmartfloDID,
+  setSmartfloDID
 } from '@/lib/smartflo';
 import { useCRM } from '@/contexts/CRMContext';
 import { toast } from 'sonner';
@@ -64,6 +66,21 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
   const [isAutoLogged, setIsAutoLogged] = useState(false);
   const [cdrReason, setCdrReason] = useState<string | null>(null);
   const [isEditingNumber, setIsEditingNumber] = useState(false);
+  const [pilotDID, setPilotDID] = useState<string>(() => getSmartfloDID());
+  const [isEditingDID, setIsEditingDID] = useState(false);
+  const [newDIDInput, setNewDIDInput] = useState(() => getSmartfloDID());
+
+  const handleSaveDID = () => {
+    const clean = newDIDInput.replace(/^\+/, '').replace(/\s/g, '').replace(/\D/g, '');
+    if (!clean || clean.length < 10) {
+      toast.error('Please enter a valid 10 to 12 digit Tata Virtual DID');
+      return;
+    }
+    setPilotDID(clean);
+    setSmartfloDID(clean);
+    setIsEditingDID(false);
+    toast.success(`Virtual DID updated to ${clean}`);
+  };
 
   // Take agent's / lawyer's number directly from profile or fallback to configured default agent phone
   const [agentNumber, setAgentNumber] = useState<string>(
@@ -103,6 +120,10 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
         '9800000001';
       setAgentNumber(resolved);
       setIsEditingNumber(false);
+      const activeDid = getSmartfloDID();
+      setPilotDID(activeDid);
+      setNewDIDInput(activeDid);
+      setIsEditingDID(false);
     }
   }, [open, currentUser, users]);
 
@@ -199,7 +220,7 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
     const reasonText = cdr?.description || cdr?.reason || cdrReason || dispositionLabel;
     setCdrReason(reasonText);
 
-    const logDetails = `Tata Smartflo Call: ${dispositionLabel} (Talk Time: ${durationFormatted}). Virtual DID: ${SMARTFLO_CONFIG.pilotNumber}. Ref: ${currentRef}. Detail: ${reasonText}. ${callNotes ? `Notes: ${callNotes}` : ''}`;
+    const logDetails = `Tata Smartflo Call: ${dispositionLabel} (Talk Time: ${durationFormatted}). Virtual DID: ${pilotDID}. Ref: ${currentRef}. Detail: ${reasonText}. ${callNotes ? `Notes: ${callNotes}` : ''}`;
 
     try {
       // Only attach recording URL if the call was actually answered and connected with talk time
@@ -347,7 +368,7 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
     isLoggedRef.current = false;
     setSeconds(0);
     setCdrReason(null);
-    setStatusMessage(`Triggering call via Tata Smartflo (DID: ${SMARTFLO_CONFIG.pilotNumber})...`);
+    setStatusMessage(`Triggering call via Tata Smartflo (DID: ${pilotDID})...`);
 
     const res = await initiateSmartfloCall(
       {
@@ -358,6 +379,7 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
         agentPhoneOrExt: agentNumber.trim(),
         customerNumber: rawPhoneNumber,
         serviceName,
+        callerId: pilotDID,
       },
       (status, msg) => {
         setCallStatus(status);
@@ -396,7 +418,7 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
       } else {
         // Real Tata Smartflo flow: Agent phone rings first!
         setCallStatus('ringing_agent');
-        setStatusMessage(`Calling ${matchedAgentName}'s phone (${agentNumber.trim()}) from DID ${SMARTFLO_CONFIG.pilotNumber}. Pick up to connect!`);
+        setStatusMessage(`Calling ${matchedAgentName}'s phone (${agentNumber.trim()}) from DID ${pilotDID}. Pick up to connect!`);
         startPoller(res.refId);
       }
     }
@@ -496,7 +518,7 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
           </div>
           <DialogTitle className="text-lg font-bold mt-2">Calling {leadName}</DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            Two-way call bridge powered by Tata Tele Business Services (TTBS) Virtual DID <span className="font-mono font-semibold text-primary">{SMARTFLO_CONFIG.pilotNumber}</span>.
+            Two-way call bridge powered by Tata Tele Business Services (TTBS) Virtual DID <span className="font-mono font-semibold text-primary">{pilotDID}</span>.
           </DialogDescription>
         </DialogHeader>
 
@@ -509,8 +531,46 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
             </div>
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground font-medium">Caller ID Displayed (Virtual DID):</span>
-              <span className="font-mono text-primary font-bold">{SMARTFLO_CONFIG.pilotNumber}</span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-mono text-primary font-bold">{pilotDID}</span>
+                {callStatus === 'idle' && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingDID(!isEditingDID)}
+                    className="text-[11px] text-primary hover:underline flex items-center gap-1 font-medium ml-1"
+                  >
+                    <Settings2 className="w-3 h-3" />
+                    {isEditingDID ? 'Cancel' : 'Change DID'}
+                  </button>
+                )}
+              </div>
             </div>
+            {isEditingDID && callStatus === 'idle' && (
+              <div className="pt-2 border-t border-border/60 space-y-1.5">
+                <label className="text-[11px] text-muted-foreground block font-medium">
+                  Tata Tele Virtual Pilot Number (DID):
+                </label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="tel"
+                    value={newDIDInput}
+                    onChange={(e) => setNewDIDInput(e.target.value)}
+                    placeholder="e.g. 917965561294"
+                    className="h-8 text-xs font-mono rounded-lg bg-background"
+                  />
+                  <Button
+                    size="sm"
+                    className="h-8 text-xs px-3 rounded-lg"
+                    onClick={handleSaveDID}
+                  >
+                    Save
+                  </Button>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Saved directly to your browser & applies immediately as Caller ID for all Tata Smartflo calls.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Two-Way Connectivity Profile Integration */}
@@ -590,7 +650,7 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
               )}
 
               <p className="text-[11px] text-muted-foreground leading-relaxed pt-0.5">
-                Two-way bridge: Tata Smartflo PBX dials your phone (<span className="font-mono text-foreground font-semibold">+91 {agentNumber.slice(-10)}</span>) first. When answered, it connects the customer from Virtual DID <code className="text-primary font-mono font-semibold">{SMARTFLO_CONFIG.pilotNumber}</code>.
+                Two-way bridge: Tata Smartflo PBX dials your phone (<span className="font-mono text-foreground font-semibold">+91 {agentNumber.slice(-10)}</span>) first. When answered, it connects the customer from Virtual DID <code className="text-primary font-mono font-semibold">{pilotDID}</code>.
               </p>
             </div>
           )}
@@ -607,7 +667,7 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
                   Pick up {matchedAgentName}'s phone ({agentNumber})
                 </p>
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Incoming call from Virtual DID <code className="font-mono text-primary">{SMARTFLO_CONFIG.pilotNumber}</code>
+                  Incoming call from Virtual DID <code className="font-mono text-primary">{pilotDID}</code>
                 </p>
               </div>
               <div className="flex flex-col items-center justify-center gap-2 pt-1">
@@ -664,7 +724,7 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
                 <p className="text-3xl font-mono font-extrabold text-foreground">{formatTimer(seconds)}</p>
                 <p className="text-xs text-success font-semibold mt-1">Live call connected • Recording active 🔴</p>
                 <p className="text-[11px] text-muted-foreground mt-0.5">
-                  Both parties bridged via {SMARTFLO_CONFIG.pilotNumber}
+                  Both parties bridged via {pilotDID}
                 </p>
               </div>
             </div>
