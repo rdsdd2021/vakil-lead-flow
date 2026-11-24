@@ -26,6 +26,20 @@ let LEADS_STORE = [
       notes: [],
       call_logs: [
         {
+          id: 'call_HYD1-D4-1795540477.232424',
+          call_id: 'HYD1-D4-1795540477.232424',
+          action: 'Phone Call Connected',
+          details: 'Tata Smartflo Masked 2-Way Call: Answered by customer. Talk time: 00:15 (Total: 25s). Virtual DID: 917965561294.',
+          duration: '00:15',
+          call_duration: '00:15',
+          call_status: 'Answered',
+          status: 'answered',
+          recording_url: 'https://cloudphone.tatateleservices.com/file/recording?callId=HYD1-D4-1795540477.232424&type=rec&token=ZlJac3Q5NDJaQ2dhRWFNbVBnOUY4Tk1qSXhxYjFTYTJ5VmlyWU5BS0pXWi9zclBjdlZyZ0dWR2RVUitVUXhsZzo6YWIxMjM0Y2Q1NnJ0eXl1dQ%3D%3D',
+          masked_number: '+91 82••• ••813',
+          created_by: 'Priya Sharma (Super Admin)',
+          created_at: '2026-11-24T17:14:37.000Z'
+        },
+        {
           id: 'call_MUM1-D7-1795513949.254658',
           call_id: 'MUM1-D7-1795513949.254658',
           action: 'Phone Call Connected',
@@ -42,19 +56,6 @@ let LEADS_STORE = [
       ],
       meetings: [],
       activity_logs: [
-        {
-          id: 'call_act_MUM1-D7-1795513949.254658',
-          call_id: 'MUM1-D7-1795513949.254658',
-          action: 'Phone Call Connected',
-          details: 'Tata Smartflo Masked 2-Way Call: Answered by customer. Talk time: 00:08 (Total: 21s). Virtual DID: 917965561294.',
-          duration: '00:08',
-          call_duration: '00:08',
-          call_status: 'Answered',
-          recording_url: 'https://cloudphone.tatateleservices.com/file/recording?callId=MUM1-D7-1795513949.254658&type=rec&token=QmcwZWd0QloxYVYxa3hJekpwVE42N3F3eWI3S2NnZG9XWUxmVWUrR1JFRUFuSW5YWGplT290VjBVVXRpYVdXaTo6YWIxMjM0Y2Q1NnJ0eXl1dQ%3D%3D',
-          masked_number: '+91 82••• ••813',
-          created_by: 'Ramanuj Dey Sarkar',
-          created_at: '2026-11-24T15:22:29.000Z'
-        },
         { id: 'act_1', action: 'Lead Created', details: 'Client enquiry registered in CRM', created_by: 'Intake Desk', created_at: '2026-11-23T18:00:00.000Z' }
       ]
     })

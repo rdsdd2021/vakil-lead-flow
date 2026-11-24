@@ -100,19 +100,6 @@ const LeadDetail = () => {
         records = data.results || [];
       }
 
-      // Also specifically query known calls like MUM1-D7-1795513949.254658 if matching
-      if (cleanNumber.endsWith('8250622813') || cleanNumber.endsWith('9933007663')) {
-        try {
-          const directRes = await fetch('/api/smartflo/v1/call/records?call_id=MUM1-D7-1795513949.254658');
-          if (directRes.ok) {
-            const directData = await directRes.json();
-            if (directData.results?.[0]) {
-              records = [directData.results[0], ...records.filter(r => r.call_id !== directData.results[0].call_id)];
-            }
-          }
-        } catch (e) {}
-      }
-
       const matched = records.filter((r: any) => {
         const client = (r.client_number || '').replace(/\D/g, '');
         const agent = (r.agent_number || '').replace(/\D/g, '');
@@ -215,12 +202,32 @@ const LeadDetail = () => {
   const unifiedLeadLogs = useMemo(() => {
     const list: any[] = [];
     const seenIds = new Set<string>();
+    const seenCallIds = new Set<string>();
+    const seenRecordingUrls = new Set<string>();
+
+    const checkAndTrackCall = (callId?: string | null, recordingUrl?: string | null): boolean => {
+      if (callId) {
+        const cleanId = callId.replace(/^(call_|call_act_|pbx_)/, '').trim();
+        if (cleanId) {
+          if (seenCallIds.has(cleanId)) return false;
+          seenCallIds.add(cleanId);
+        }
+      }
+      if (recordingUrl && recordingUrl.trim()) {
+        const cleanUrl = recordingUrl.split('&token=')[0]; // compare base recording URL to prevent token mismatch dupes
+        if (seenRecordingUrls.has(cleanUrl)) return false;
+        seenRecordingUrls.add(cleanUrl);
+      }
+      return true;
+    };
 
     // 1. Regular CRM activity logs
     leadLogs.forEach((log: any) => {
       if (log.id && !seenIds.has(log.id)) {
-        seenIds.add(log.id);
-        list.push(log);
+        if (checkAndTrackCall(log.call_id || log.id, log.recording_url)) {
+          seenIds.add(log.id);
+          list.push(log);
+        }
       }
     });
 
@@ -228,18 +235,20 @@ const LeadDetail = () => {
     (parsedNotes.activity_logs || []).forEach((log: any) => {
       const logId = log.id || `act_${log.created_at}`;
       if (!seenIds.has(logId)) {
-        seenIds.add(logId);
-        list.push({
-          id: logId,
-          entity_id: id,
-          entity_type: 'lead',
-          action: log.action || 'Activity',
-          details: log.details || '',
-          call_duration: log.duration || log.call_duration,
-          recording_url: log.recording_url,
-          created_by: log.created_by || 'System',
-          created_at: log.created_at || new Date().toISOString(),
-        });
+        if (checkAndTrackCall(log.call_id || log.id, log.recording_url)) {
+          seenIds.add(logId);
+          list.push({
+            id: logId,
+            entity_id: id,
+            entity_type: 'lead',
+            action: log.action || 'Activity',
+            details: log.details || '',
+            call_duration: log.duration || log.call_duration,
+            recording_url: log.recording_url,
+            created_by: log.created_by || 'System',
+            created_at: log.created_at || new Date().toISOString(),
+          });
+        }
       }
     });
 
@@ -247,25 +256,27 @@ const LeadDetail = () => {
     (parsedNotes.call_logs || []).forEach((clog: any) => {
       const clogId = clog.id || clog.call_id || `clog_${clog.created_at}`;
       if (!seenIds.has(clogId)) {
-        seenIds.add(clogId);
-        list.push({
-          id: clogId,
-          entity_id: id,
-          entity_type: 'lead',
-          action: clog.action || 'Phone Call Connected',
-          details: clog.details || clog.text || 'Tata Smartflo call',
-          call_duration: clog.duration || clog.call_duration || '00:00',
-          recording_url: clog.recording_url,
-          created_by: clog.created_by || 'Smartflo Telephony',
-          created_at: clog.created_at || new Date().toISOString(),
-        });
+        if (checkAndTrackCall(clog.call_id || clog.id, clog.recording_url)) {
+          seenIds.add(clogId);
+          list.push({
+            id: clogId,
+            entity_id: id,
+            entity_type: 'lead',
+            action: clog.action || 'Phone Call Connected',
+            details: clog.details || clog.text || 'Tata Smartflo call',
+            call_duration: clog.duration || clog.call_duration || '00:00',
+            recording_url: clog.recording_url,
+            created_by: clog.created_by || 'Smartflo Telephony',
+            created_at: clog.created_at || new Date().toISOString(),
+          });
+        }
       }
     });
 
     // 4. Live PBX CDR records from Tata Smartflo
     telecomCalls.forEach((r: any) => {
       const callId = r.call_id || r.ref_id || r.id;
-      if (callId && !seenIds.has(`pbx_${callId}`) && !seenIds.has(callId) && !seenIds.has(`call_${callId}`) && !seenIds.has(`call_act_${callId}`)) {
+      if (callId && checkAndTrackCall(callId, r.recording_url)) {
         seenIds.add(`pbx_${callId}`);
         const isAnswered = r.status === 'answered' || (r.answered_seconds > 0);
         const hasRealRecording = isAnswered && r.answered_seconds > 0 && r.recording_url;
