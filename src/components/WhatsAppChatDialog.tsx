@@ -31,6 +31,7 @@ interface WhatsAppChatDialogProps {
   leadId?: string;
   ticketId?: string;
   serviceTitle?: string;
+  initialMessage?: string;
 }
 
 export const WhatsAppChatDialog: React.FC<WhatsAppChatDialogProps> = ({
@@ -41,6 +42,7 @@ export const WhatsAppChatDialog: React.FC<WhatsAppChatDialogProps> = ({
   leadId,
   ticketId,
   serviceTitle,
+  initialMessage,
 }) => {
   const { currentUser, currentRole, addActivityLog } = useCRM();
   const navigate = useNavigate();
@@ -95,6 +97,9 @@ export const WhatsAppChatDialog: React.FC<WhatsAppChatDialogProps> = ({
 
   useEffect(() => {
     if (open) {
+      if (initialMessage) {
+        setInputText(initialMessage);
+      }
       loadHistory();
       // Poll for incoming replies every 4 seconds while open
       const interval = setInterval(() => {
@@ -162,12 +167,6 @@ export const WhatsAppChatDialog: React.FC<WhatsAppChatDialogProps> = ({
     setInputText(populated);
   };
 
-  const handleNativeWhatsAppFallback = () => {
-    const cleanNumber = rawPhoneNumber.replace(/^\+/, '').replace(/\s/g, '');
-    const url = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(inputText || `Hello ${clientName}, this is Vakiltech.`)}`;
-    window.open(url, '_blank');
-  };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg p-0 overflow-hidden rounded-2xl gap-0 h-[85vh] max-h-[680px] flex flex-col bg-background border border-border shadow-2xl">
@@ -216,22 +215,13 @@ export const WhatsAppChatDialog: React.FC<WhatsAppChatDialogProps> = ({
                 size="icon"
                 variant="ghost"
                 className="h-8 w-8 text-white hover:bg-white/20 rounded-lg"
-                title="Open in WhatsApp Inbox"
+                title="Open in Full WhatsApp Inbox"
                 onClick={() => {
                   onOpenChange(false);
                   navigate(`/inbox?phone=${rawPhoneNumber}`);
                 }}
               >
                 <MessageSquare className="w-3.5 h-3.5" />
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 text-white hover:bg-white/20 rounded-lg"
-                title="Open in WhatsApp Web"
-                onClick={handleNativeWhatsAppFallback}
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
               </Button>
             </div>
           </div>

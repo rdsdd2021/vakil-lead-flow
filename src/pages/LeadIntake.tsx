@@ -307,12 +307,12 @@ export default function LeadIntake() {
                 type="button"
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs h-10 rounded-xl gap-2 shadow-sm"
                 onClick={() => {
-                  const text = encodeURIComponent(`Hi Vakiltech Legal Team, I have registered inquiry Ref: ${submittedLead.customId} regarding ${submittedLead.service}.`);
-                  window.open(`https://wa.me/12084850645?text=${text}`, '_blank');
+                  const cleanPhone = (submittedLead.phone || '').replace(/^\+/, '').replace(/\s/g, '');
+                  navigate(`/inbox?phone=${cleanPhone}`);
                 }}
               >
                 <MessageCircle className="w-4 h-4" />
-                <span>Open WhatsApp Chat with Vakiltech (+1 208-485-0645)</span>
+                <span>Open in In-CRM WhatsApp Inbox</span>
               </Button>
             </div>
 

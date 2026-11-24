@@ -162,9 +162,9 @@ const FollowUps = () => {
                     </Button>
                   ) : (
                     <Button size="sm" className="h-9 rounded-xl bg-success text-success-foreground hover:bg-success/90 flex-1 gap-1.5" onClick={() => {
-                      addActivityLog(fu.lead_id, 'WhatsApp Initiated', `Initiated scheduled WhatsApp message to ${maskPhoneNumber(phone, false)}`);
+                      addActivityLog(fu.lead_id, 'WhatsApp Initiated', `Opened in-built WhatsApp inbox for ${maskPhoneNumber(phone, false)}`);
                       const cleanPhone = (phone || '').replace(/^\+/, '').replace(/\s/g, '');
-                      window.open(`https://wa.me/${cleanPhone}`, '_blank');
+                      navigate(`/inbox?phone=${cleanPhone}`);
                     }}>
                       <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
                     </Button>

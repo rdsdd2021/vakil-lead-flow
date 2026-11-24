@@ -22,6 +22,8 @@ import {
 } from '@/lib/smartflo';
 import { useCRM } from '@/contexts/CRMContext';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
+import { sendWhatsAppMessageApi } from '@/lib/kapso';
 
 interface SmartfloCallDialogProps {
   open: boolean;
@@ -49,6 +51,7 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
   serviceName,
   onCallFinished,
 }) => {
+  const navigate = useNavigate();
   const { currentUser, currentRole, users, addActivityLog, leads, updateLeadInServer, updateCurrentUserPhone } = useCRM();
   const [callStatus, setCallStatus] = useState<SmartfloCallStatus>('idle');
   const [statusMessage, setStatusMessage] = useState('');
@@ -423,13 +426,23 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
   };
 
   // Shortcut to send follow-up WhatsApp template if client cut or didn't answer
-  const handleSendWhatsAppFollowup = () => {
+  const handleSendWhatsAppFollowup = async () => {
     const cleanNumber = rawPhoneNumber.replace(/^\+/, '').replace(/\s/g, '');
     const message = `Hi ${leadName}, this is ${currentUser.name} from Vakiltech. We tried reaching you regarding your enquiry about ${serviceName || 'legal services'}, but could not connect. When would be a convenient time for a quick 2-minute call?`;
-    const url = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(message)}`;
-    window.open(url, '_blank');
-    addActivityLog(leadId, 'WhatsApp Sent', `Sent follow-up template to client after missed/rejected call.`);
+    try {
+      await sendWhatsAppMessageApi({
+        phone_number: cleanNumber,
+        content: message,
+        sender_name: currentUser.name,
+        lead_id: leadId,
+      });
+      addActivityLog(leadId, 'WhatsApp Sent', `Sent follow-up template via In-CRM WhatsApp to client after missed/rejected call.`);
+      toast.success('Follow-up message sent via Inbuilt WhatsApp!');
+    } catch (err: any) {
+      console.warn('Auto-followup message note:', err);
+    }
     onOpenChange(false);
+    navigate(`/inbox?phone=${cleanNumber}`);
   };
 
   // Schedule next callback in 30 minutes

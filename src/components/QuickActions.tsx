@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Phone, MessageCircle, Link2, Calendar as CalendarIcon, ChevronRight, ShieldCheck, ExternalLink } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Phone, MessageCircle, Link2, Calendar as CalendarIcon, ChevronRight, ShieldCheck, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -78,6 +79,7 @@ interface QuickActionsProps {
 }
 
 export const QuickActions = ({ whatsapp_number, name, service, leadId, ticketId, onPaymentLink, onFollowup, compact }: QuickActionsProps) => {
+  const navigate = useNavigate();
   const { addActivityLog, currentRole } = useCRM();
   const [followupDate, setFollowupDate] = useState<Date>();
   const [followupTime, setFollowupTime] = useState('09:00');
@@ -86,6 +88,7 @@ export const QuickActions = ({ whatsapp_number, name, service, leadId, ticketId,
   const [waPopoverOpen, setWaPopoverOpen] = useState(false);
   const [callDialogOpen, setCallDialogOpen] = useState(false);
   const [chatDialogOpen, setChatDialogOpen] = useState(false);
+  const [initialWaMessage, setInitialWaMessage] = useState<string>('');
 
   const serviceLabel = service ? SERVICE_LABELS[service] : undefined;
   const isSuperAdmin = currentRole === 'super_admin';
@@ -100,23 +103,20 @@ export const QuickActions = ({ whatsapp_number, name, service, leadId, ticketId,
 
   const openWhatsApp = (message: string, isTemplate: boolean = false, templateLabel?: string) => {
     if (leadId) {
-      addActivityLog(leadId, 'WhatsApp Initiated', isTemplate ? `Sent template "${templateLabel}" to ${maskPhoneNumber(whatsapp_number, isSuperAdmin)}` : `Initiated WhatsApp chat with ${maskPhoneNumber(whatsapp_number, isSuperAdmin)}`);
+      addActivityLog(leadId, 'WhatsApp Initiated', isTemplate ? `Selected template "${templateLabel}" for ${maskPhoneNumber(whatsapp_number, isSuperAdmin)}` : `Initiated in-built WhatsApp chat with ${maskPhoneNumber(whatsapp_number, isSuperAdmin)}`);
     }
-    // wa.me requires the number without any leading + or spaces
-    const cleanNumber = whatsapp_number.replace(/^\+/, '').replace(/\s/g, '');
-    const url = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(message)}`;
-    navigator.clipboard?.writeText(message).catch(() => {});
-    const win = window.open(url, '_blank');
-    if (!win) {
-      toast.info('Message copied! Open WhatsApp manually.', {
-        description: `Send to ${maskPhoneNumber(whatsapp_number, isSuperAdmin)}`,
-        action: { label: 'Open', onClick: () => window.location.href = url },
-      });
-    }
+    setInitialWaMessage(message);
+    setChatDialogOpen(true);
+    setWaPopoverOpen(false);
   };
 
   const handleWhatsAppDirect = () => {
-    openWhatsApp(`Hi ${name}, this is Vakiltech. `);
+    const cleanNumber = whatsapp_number.replace(/^\+/, '').replace(/\s/g, '');
+    if (leadId) {
+      addActivityLog(leadId, 'WhatsApp Initiated', `Opened full WhatsApp Inbox for ${maskPhoneNumber(whatsapp_number, isSuperAdmin)}`);
+    }
+    navigate(`/inbox?phone=${cleanNumber}`);
+    setWaPopoverOpen(false);
   };
 
   const handleWhatsAppTemplate = (template: WhatsAppTemplate) => {
@@ -192,17 +192,17 @@ export const QuickActions = ({ whatsapp_number, name, service, leadId, ticketId,
             <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
           </button>
 
-          {/* External WhatsApp Web Trigger */}
+          {/* Full In-CRM WhatsApp Inbox Trigger */}
           <button
-            onClick={() => { handleWhatsAppDirect(); setWaPopoverOpen(false); }}
+            onClick={handleWhatsAppDirect}
             className="w-full flex items-center gap-2.5 p-2 rounded-lg hover:bg-muted/60 transition-colors text-left"
           >
-            <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
-              <ExternalLink className="w-4 h-4 text-muted-foreground" />
+            <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              <MessageSquare className="w-4 h-4" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium">Open WhatsApp Web</p>
-              <p className="text-[10px] text-muted-foreground">External wa.me chat link</p>
+              <p className="text-xs font-medium">Open Full Inbox</p>
+              <p className="text-[10px] text-muted-foreground">Inbuilt dual-pane WhatsApp screen</p>
             </div>
             <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
           </button>
@@ -305,6 +305,7 @@ export const QuickActions = ({ whatsapp_number, name, service, leadId, ticketId,
       leadId={leadId}
       ticketId={ticketId}
       serviceTitle={serviceLabel}
+      initialMessage={initialWaMessage}
     />
   ) : null;
 
