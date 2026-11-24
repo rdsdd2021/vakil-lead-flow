@@ -608,6 +608,25 @@ export const CRMProvider = ({ children }: { children: ReactNode }) => {
               });
             });
           }
+
+          if (parsed.call_logs && Array.isArray(parsed.call_logs)) {
+            parsed.call_logs.forEach((clog: any) => {
+              if (!allLogs.some(l => l.id === clog.id)) {
+                allLogs.push({
+                  id: clog.id || `clog_${Date.now()}`,
+                  action: clog.action || 'Call Log',
+                  details: clog.text || clog.details || 'Call recorded',
+                  call_duration: clog.duration || clog.call_duration,
+                  call_status: clog.call_status,
+                  recording_url: clog.recording_url,
+                  masked_number: clog.masked_number,
+                  created_by: clog.created_by || 'Agent',
+                  created_at: clog.created_at || new Date().toISOString(),
+                  entity_id: id
+                });
+              }
+            });
+          }
         } catch (e) {
           // Ignore parse errors for older data
         }
@@ -657,9 +676,24 @@ export const CRMProvider = ({ children }: { children: ReactNode }) => {
       created_at: new Date().toISOString()
     };
 
+    const isCallAction = action.toLowerCase().includes('call') || action.toLowerCase().includes('answer') || action.toLowerCase().includes('busy') || action.toLowerCase().includes('rejected');
+    
+    const callLogItem = isCallAction ? {
+      id: `call_${Date.now()}`,
+      text: `${action}: ${details}`,
+      action,
+      duration: extra?.call_duration || '00:00',
+      call_status: extra?.call_status || action,
+      recording_url: extra?.recording_url,
+      masked_number: extra?.masked_number,
+      created_by: currentUser.name,
+      created_at: new Date().toISOString()
+    } : null;
+
     const updatedNotes = {
       ...parsedNotes,
-      activity_logs: [newLog, ...(parsedNotes.activity_logs || [])]
+      activity_logs: [newLog, ...(parsedNotes.activity_logs || [])],
+      call_logs: callLogItem ? [callLogItem, ...(parsedNotes.call_logs || [])] : (parsedNotes.call_logs || [])
     };
 
     if (lead) {
