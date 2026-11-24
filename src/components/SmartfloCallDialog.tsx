@@ -233,10 +233,15 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
     const logDetails = `Tata Smartflo Call: ${dispositionLabel} (Talk Time: ${durationFormatted}). Virtual DID: ${pilotDID}. Ref: ${currentRef}. Detail: ${reasonText}. ${callNotes ? `Notes: ${callNotes}` : ''}`;
 
     try {
-      // Only attach recording URL if the call was actually answered and connected with talk time
-      // (Telecom PBX sends a 144-byte empty stub file for missed / 0s calls)
-      const isActuallyConnected = disposition === 'connected' && (callSecs > 0 || (cdr && cdr.answered_seconds > 0));
-      const recUrl = isActuallyConnected ? (cdr?.recording_url || recordingUrl || undefined) : undefined;
+      // Telecom PBX generates a 144-byte empty stub file for missed, cut, or 0s calls.
+      // A recording URL should ONLY be attached if the call was genuinely answered by both parties:
+      // - If CDR is available: cdr.status must be 'answered' AND cdr.answered_seconds must be > 0.
+      // - If CDR is not yet available: disposition must be 'connected' AND talk time must be >= 5 seconds.
+      const hasGenuineAudio = cdr 
+        ? (cdr.status === 'answered' && Number(cdr.answered_seconds) > 0)
+        : (disposition === 'connected' && callSecs >= 5);
+
+      const recUrl = hasGenuineAudio ? (cdr?.recording_url || recordingUrl || undefined) : undefined;
       setRecordingUrl(recUrl || null);
 
       // 1. Add to CRM Activity Timeline

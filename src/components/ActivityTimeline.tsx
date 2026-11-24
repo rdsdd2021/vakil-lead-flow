@@ -41,7 +41,7 @@ export const ActivityTimeline = ({ logs }: { logs: ActivityLog[] }) => {
                   {log.call_duration}
                 </Badge>
               )}
-              {log.recording_url && !log.action?.includes('Rejected') && !log.action?.includes('No Answer') && log.call_duration !== '0:00' && (
+              {log.recording_url && !log.action?.includes('Rejected') && !log.action?.includes('No Answer') && log.call_duration !== '0:00' && log.call_duration !== '00:00' && (
                 <Badge variant="outline" className="text-[9px] py-0 px-1.5 h-4 text-primary border-primary/30 bg-primary/5 gap-1">
                   <Mic className="w-2.5 h-2.5" /> Tata Smartflo Rec
                 </Badge>
@@ -51,7 +51,7 @@ export const ActivityTimeline = ({ logs }: { logs: ActivityLog[] }) => {
             <p className="text-[11px] text-muted-foreground mt-0.5">{log.details}</p>
 
             {/* In-CRM Call Recording Player */}
-            {log.recording_url && !log.action?.includes('Rejected') && !log.action?.includes('No Answer') && log.call_duration !== '0:00' && (
+            {log.recording_url && !log.action?.includes('Rejected') && !log.action?.includes('No Answer') && log.call_duration !== '0:00' && log.call_duration !== '00:00' && (
               <div className="mt-2 p-2.5 bg-muted/50 rounded-xl border border-border/60 space-y-1.5">
                 <div className="flex items-center justify-between text-[10px] text-muted-foreground font-medium">
                   <span className="flex items-center gap-1 font-semibold text-foreground">
