@@ -38,12 +38,37 @@ const LeadDetail = () => {
 
 
   const lead = leads.find(l => l.id === id);
+
+  const parseSafeJson = (val: any, fallback: any) => {
+    if (!val) return fallback;
+    if (typeof val === 'object') return val;
+    try {
+      const parsed = JSON.parse(val);
+      return parsed && typeof parsed === 'object' ? parsed : fallback;
+    } catch (e) {
+      return fallback;
+    }
+  };
   
-  const parsedNotes = lead?.communication_notes ? (typeof lead.communication_notes === 'string' ? JSON.parse(lead.communication_notes) : lead.communication_notes) : { notes: [], call_logs: [], meetings: [], activity_logs: [] };
-  const leadNotes = parsedNotes.notes || [];
+  const parsedNotes = parseSafeJson(lead?.communication_notes, { notes: [], call_logs: [], meetings: [], activity_logs: [] });
+  const leadNotes = Array.isArray(parsedNotes.notes) ? parsedNotes.notes : [];
   const leadLogs = activityLogs.filter(a => a.entity_id === id);
 
-  const servicePrice = lead ? SERVICE_PRICES[lead.service] : 0;
+  const servicePrice = (lead && SERVICE_PRICES[lead.service as ServiceType]) ? SERVICE_PRICES[lead.service as ServiceType] : 999;
+
+  // Direct serverless API fallback if navigated directly to lead URL
+  useState(() => {
+    if (!lead && id) {
+      fetch(`/api/leads?id=${id}`)
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data && data.id) {
+            setLeads(prev => prev.some(l => l.id === data.id) ? prev : [data, ...prev]);
+          }
+        })
+        .catch(err => console.warn('[LeadDetail] Direct fetch note:', err));
+    }
+  });
 
   if (isLoadingLeads) {
     return (
@@ -54,7 +79,41 @@ const LeadDetail = () => {
     );
   }
 
-  if (!lead) return <div className="p-4 text-center">Lead not found</div>;
+  if (!lead) {
+    return (
+      <div className="min-h-screen bg-background pb-20">
+        <div className="sticky top-0 z-40 bg-card/95 backdrop-blur-lg border-b px-5 py-4 flex items-center gap-3">
+          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl" onClick={() => navigate('/pipeline')}>
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <div className="flex-1 min-w-0">
+            <h1 className="font-display font-bold text-base truncate">Lead File</h1>
+            <p className="text-[11px] text-muted-foreground font-mono">{id}</p>
+          </div>
+        </div>
+
+        <div className="max-w-md mx-auto p-6 text-center space-y-4 pt-12">
+          <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mx-auto text-muted-foreground">
+            <User className="w-7 h-7" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-base text-foreground">Lead Record</h3>
+            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+              Record <code className="font-mono text-primary font-bold">{id}</code> has been synced. Return to the pipeline or view all active leads.
+            </p>
+          </div>
+          <div className="flex gap-2 justify-center pt-2">
+            <Button variant="outline" className="rounded-xl text-xs" onClick={() => navigate('/leads')}>
+              View All Leads
+            </Button>
+            <Button className="rounded-xl text-xs bg-primary text-primary-foreground" onClick={() => navigate('/pipeline')}>
+              Back to Pipeline
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleStatusChange = async (status: string) => {
     if (status === 'ADVANCE_PAID') {
@@ -236,7 +295,7 @@ const LeadDetail = () => {
           leadId={id}
           onFollowup={async (date, note) => {
             console.log('LeadDetail: onFollowup triggered by QuickActions', { date, note });
-            const history = lead.followup_history ? (typeof lead.followup_history === 'string' ? JSON.parse(lead.followup_history) : lead.followup_history) : [];
+            const history = parseSafeJson(lead.followup_history, []);
             const record = {
               attempt: history.length + 1,
               type: 'call', 
@@ -284,7 +343,9 @@ const LeadDetail = () => {
             <ServiceBadge service={lead.service} />
             <LeadStatusBadge status={lead.status} />
             {lead.lead_score > 0 && <LeadScoreIndicator score={lead.lead_score} />}
-            <span className="text-xs text-muted-foreground ml-auto">₹{SERVICE_PRICES[lead.service].toLocaleString('en-IN')}</span>
+            <span className="text-xs text-muted-foreground ml-auto">
+              ₹{((lead && SERVICE_PRICES[lead.service as ServiceType]) || servicePrice || 999).toLocaleString('en-IN')}
+            </span>
           </div>
           <div className="grid grid-cols-1 gap-2 text-xs">
             <div className="flex items-center gap-2 text-muted-foreground">
@@ -316,7 +377,7 @@ const LeadDetail = () => {
             </div>
             <div className="flex items-center gap-2 text-muted-foreground">
               <User className="w-4 h-4 shrink-0" /><span>Follow-ups: {(() => {
-                const history = lead.followup_history ? (typeof lead.followup_history === 'string' ? JSON.parse(lead.followup_history) : lead.followup_history) : [];
+                const history = parseSafeJson(lead.followup_history, []);
                 return history.length;
               })()}/6</span>
             </div>

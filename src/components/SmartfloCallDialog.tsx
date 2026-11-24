@@ -495,8 +495,8 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
             )}
           </div>
           <DialogTitle className="text-lg font-bold mt-2">Calling {leadName}</DialogTitle>
-          <DialogDescription className="text-xs">
-            Number masked for privacy. Bridging via Tata Virtual DID <span className="font-mono font-semibold text-foreground">{SMARTFLO_CONFIG.pilotNumber}</span>.
+          <DialogDescription className="text-xs text-muted-foreground">
+            Two-way call bridge powered by Tata Tele Business Services (TTBS) Virtual DID <span className="font-mono font-semibold text-primary">{SMARTFLO_CONFIG.pilotNumber}</span>.
           </DialogDescription>
         </DialogHeader>
 
@@ -504,22 +504,22 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
           {/* Numbers Info */}
           <div className="bg-muted/40 rounded-xl p-3.5 space-y-2 border border-border/50 text-xs">
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Customer (Lead):</span>
+              <span className="text-muted-foreground font-medium">Customer Receiving Call:</span>
               <span className="font-mono font-bold text-foreground">{maskedCustomer}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Tata Virtual Caller ID (DID):</span>
-              <span className="font-mono text-primary font-semibold">{SMARTFLO_CONFIG.pilotNumber}</span>
+              <span className="text-muted-foreground font-medium">Caller ID Displayed (Virtual DID):</span>
+              <span className="font-mono text-primary font-bold">{SMARTFLO_CONFIG.pilotNumber}</span>
             </div>
           </div>
 
           {/* Two-Way Connectivity Profile Integration */}
           {callStatus === 'idle' && (
-            <div className="bg-primary/5 border border-primary/20 rounded-xl p-3.5 space-y-2">
+            <div className="bg-primary/5 border border-primary/20 rounded-xl p-3.5 space-y-2.5">
               <div className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-1.5 font-semibold text-foreground">
                   <User className="w-3.5 h-3.5 text-primary" />
-                  <span>Agent Calling Phone (Rings First):</span>
+                  <span>Agent Phone (Rings First):</span>
                 </div>
                 <button
                   type="button"
@@ -527,29 +527,30 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
                   className="text-[11px] text-primary hover:underline flex items-center gap-1 font-medium"
                 >
                   <Settings2 className="w-3 h-3" />
-                  {isEditingNumber ? 'Use Presets' : 'Custom Number'}
+                  {isEditingNumber ? 'Select from Team' : 'Custom Number'}
                 </button>
               </div>
 
               {!isEditingNumber ? (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between bg-background/80 px-3 py-2 rounded-lg border border-border/60 text-xs">
-                    <span className="text-muted-foreground font-medium">Selected Agent Number:</span>
+                    <span className="text-muted-foreground font-medium">Selected Agent:</span>
                     <span className="font-mono font-bold text-primary">
-                      {matchedAgent ? `${matchedAgent.name} — +${agentNumber}` : `+${agentNumber}`}
+                      {matchedAgent ? `${matchedAgent.name} (+91 ${agentNumber.slice(-10)})` : `+91 ${agentNumber.slice(-10)}`}
                     </span>
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5 max-h-24 overflow-y-auto">
                     {users.map(u => {
-                      const isSelected = agentNumber === u.phone;
+                      const isSelected = agentNumber.slice(-10) === u.phone.slice(-10);
                       return (
                         <button
                           key={u.id}
                           type="button"
                           onClick={() => {
-                            setAgentNumber(u.phone);
-                            localStorage.setItem('smartflo_agent_phone', u.phone);
-                            updateCurrentUserPhone(u.phone);
+                            const clean = u.phone.slice(-10);
+                            setAgentNumber(clean);
+                            localStorage.setItem('smartflo_agent_phone', clean);
+                            updateCurrentUserPhone(clean);
                           }}
                           className={`text-[10px] px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1 ${
                             isSelected
@@ -558,7 +559,7 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
                           }`}
                         >
                           <CheckCircle2 className={`w-3 h-3 ${isSelected ? 'opacity-100' : 'opacity-0'}`} />
-                          {u.name} ({u.phone})
+                          {u.name} ({u.phone.slice(-10)})
                         </button>
                       );
                     })}
@@ -567,23 +568,29 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
               ) : (
                 <div className="space-y-1.5 pt-1">
                   <label className="text-[11px] text-muted-foreground block">
-                    Enter custom 10-digit agent mobile number:
+                    Enter 10-digit mobile number for this call:
                   </label>
-                  <Input
-                    placeholder="e.g. 98XXXXXXXX"
-                    value={agentNumber}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/\D/g, '').slice(-10);
-                      setAgentNumber(val);
-                      updateCurrentUserPhone(val);
-                    }}
-                    className="h-9 text-xs rounded-lg font-mono bg-background"
-                  />
+                  <div className="flex gap-1.5">
+                    <span className="h-9 px-2.5 flex items-center justify-center bg-muted/60 border border-border rounded-lg text-xs font-mono font-medium text-muted-foreground">
+                      +91
+                    </span>
+                    <Input
+                      placeholder="98XXXXXXXX"
+                      value={agentNumber}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '').slice(-10);
+                        setAgentNumber(val);
+                        updateCurrentUserPhone(val);
+                      }}
+                      className="h-9 text-xs rounded-lg font-mono bg-background flex-1"
+                      maxLength={10}
+                    />
+                  </div>
                 </div>
               )}
 
               <p className="text-[11px] text-muted-foreground leading-relaxed pt-0.5">
-                Two-way bridge: Smartflo rings {matchedAgentName} (<span className="font-mono text-foreground font-semibold">+{agentNumber}</span>) first, then connects customer <span className="font-semibold text-foreground">{leadName || 'Ramanuj'}</span> from Virtual DID <code className="text-primary font-mono font-semibold">{SMARTFLO_CONFIG.pilotNumber}</code>.
+                Two-way bridge: Tata Smartflo PBX dials your phone (<span className="font-mono text-foreground font-semibold">+91 {agentNumber.slice(-10)}</span>) first. When answered, it connects the customer from Virtual DID <code className="text-primary font-mono font-semibold">{SMARTFLO_CONFIG.pilotNumber}</code>.
               </p>
             </div>
           )}
@@ -766,20 +773,12 @@ export const SmartfloCallDialog: React.FC<SmartfloCallDialogProps> = ({
           {/* Actions & Hangup Buttons */}
           <div className="flex gap-2 pt-1">
             {callStatus === 'idle' ? (
-              <div className="w-full space-y-2">
+              <div className="w-full">
                 <Button
-                  className="w-full h-11 rounded-xl gap-2 font-medium bg-success text-success-foreground hover:bg-success/90"
+                  className="w-full h-11 rounded-xl gap-2 font-medium bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
                   onClick={() => handleStartCall(false)}
                 >
                   <PhoneCall className="w-4 h-4" /> Start Call via Tata Smartflo
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full h-8 text-[11px] text-muted-foreground hover:text-foreground"
-                  onClick={() => handleStartCall(true)}
-                >
-                  Or run Simulation Test (Audio & Timer Demo)
                 </Button>
               </div>
             ) : callStatus === 'ringing_agent' || callStatus === 'bridging_customer' ? (

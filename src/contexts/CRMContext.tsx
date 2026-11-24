@@ -180,8 +180,24 @@ export const CRMProvider = ({ children }: { children: ReactNode }) => {
       if (res && res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
-          setLeads(data);
-          localStorage.setItem('vakil_leads', JSON.stringify(data));
+          // Merge with local leads to ensure zero loss
+          const merged = [...data];
+          try {
+            const stored = localStorage.getItem('vakil_leads');
+            if (stored) {
+              const localParsed = JSON.parse(stored);
+              if (Array.isArray(localParsed)) {
+                for (const l of localParsed) {
+                  if (!merged.some(m => m.id === l.id)) {
+                    merged.push(l);
+                  }
+                }
+              }
+            }
+          } catch (e) {}
+
+          setLeads(merged);
+          localStorage.setItem('vakil_leads', JSON.stringify(merged));
           setIsLoadingLeads(false);
           return;
         }
